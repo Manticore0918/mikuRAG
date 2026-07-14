@@ -1,0 +1,87 @@
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, expect, test, vi } from 'vitest'
+
+import ChatPanel from './ChatPanel'
+
+const knowledgeBases = [{
+  id: 'kb-1',
+  name: 'Operations',
+  description: null,
+  created_at: '2026-07-13T00:00:00Z',
+}]
+
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+test('shows validated Citations with expandable evidence and source access', async () => {
+  const conversation = {
+    id: 'conversation-1',
+    knowledge_base_id: 'kb-1',
+    knowledge_base_name: 'Operations',
+    title: 'Access policy',
+    created_at: '2026-07-13T00:00:00Z',
+    updated_at: '2026-07-13T00:00:00Z',
+  }
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    return {
+      ok: true,
+      status: 200,
+      json: async () => url.endsWith('/conversation-1') ? {
+        ...conversation,
+        messages: [{
+          id: 'answer-1',
+          sequence: 2,
+          role: 'assistant',
+          status: 'complete',
+          content: 'Approval is required. [1]',
+          created_at: '2026-07-13T00:00:00Z',
+          citations: [{
+            id: 'citation-1',
+            document_name: 'policy.pdf',
+            locator: { page: 2 },
+            excerpt: 'All requests require approval.',
+            retrieval_rank: 1,
+            retrieval_score: 0.03,
+            source_available: true,
+            source_url: '/api/v1/source',
+          }],
+        }],
+      } : [conversation],
+    } as Response
+  }))
+
+  render(<ChatPanel knowledgeBases={knowledgeBases} initialConversationId="conversation-1" onError={vi.fn()} />)
+
+  expect(await screen.findByText('Approval is required.')).toBeInTheDocument()
+  fireEvent.click(screen.getByText('policy.pdf'))
+  expect(screen.getByText('All requests require approval.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Open source' })).toHaveAttribute('href', '/api/v1/source')
+})
+
+
+test('renders an insufficient-evidence answer without a Citation list', async () => {
+  const conversation = {
+    id: 'conversation-2', knowledge_base_id: 'kb-1', knowledge_base_name: 'Operations',
+    title: 'Unknown topic', created_at: '2026-07-13T00:00:00Z', updated_at: '2026-07-13T00:00:00Z',
+  }
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => ({
+    ok: true,
+    status: 200,
+    json: async () => String(input).endsWith('/conversation-2') ? {
+      ...conversation,
+      messages: [{
+        id: 'answer-2', sequence: 2, role: 'assistant', status: 'complete',
+        content: 'I cannot answer reliably from the available Documents.',
+        created_at: '2026-07-13T00:00:00Z', citations: [],
+      }],
+    } : [conversation],
+  }) as Response))
+
+  const view = render(<ChatPanel knowledgeBases={knowledgeBases} initialConversationId="conversation-2" onError={vi.fn()} />)
+
+  expect(await screen.findByText(/cannot answer reliably/)).toBeInTheDocument()
+  expect(view.container.querySelector('[aria-label="Citations"]')).toBeNull()
+})

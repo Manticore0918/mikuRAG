@@ -1,0 +1,3 @@
+# Keep answer generation local and use a pinned remote embedding model
+
+mikuRAG will initially send document content and retrieval queries to Alibaba Cloud Model Studio using `tongyi-embedding-vision-flash-2026-03-06`, authenticated with an Administrator-provided API key. It will generate answers through an Administrator-configured OpenAI-compatible Ollama endpoint running `DeepSeek-R1-Distill-Qwen-7B`; mikuRAG will not manage model weights or inference hardware. This accepts explicit data disclosure during embedding in exchange for avoiding local embedding infrastructure, keeps retrieved evidence local during answer generation, allows Ollama to move to a separate server later, and pins the embedding version because changing it requires rebuilding all stored vectors.

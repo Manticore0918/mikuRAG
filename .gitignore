@@ -1,0 +1,71 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python environments, caches, builds, and coverage
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.pytest-tmp-*/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Node, TypeScript, Vite, and frontend test output
+node_modules/
+.vite/
+.vite-cache/
+.turbo/
+.next/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data and local databases
+uploads/
+postgres-data/
+redis-data/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Local development tools and editors
+.agents/
+.codex/
+.codebase-memory/
+.idea/
+.vscode/
+.fleet/
+*.swp
+*.swo
+*~
+
+# Operating-system metadata
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini

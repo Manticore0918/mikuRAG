@@ -1,0 +1,3 @@
+# Validate grounded answers before releasing text
+
+mikuRAG buffers the local model's structured answer and requires every factual claim to name one or more Evidence identifiers from the current retrieval. The API rejects unknown identifiers, model-written Citation markers, uncited claims, and unsupported conflict responses; it builds the visible Citation numbering itself. Retrieval and generation progress is streamed immediately, but answer text is released over SSE only after the whole response validates. This trades token-by-token display for the product guarantee that unverified factual text never reaches the User as an answer.

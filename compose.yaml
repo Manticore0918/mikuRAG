@@ -1,0 +1,99 @@
+name: mikurag
+
+x-backend-environment: &backend-environment
+  MIKURAG_ENVIRONMENT: ${MIKURAG_ENVIRONMENT:-development}
+  MIKURAG_DATABASE_URL: ${MIKURAG_DATABASE_URL:-postgresql+asyncpg://mikurag:mikurag@postgres:5432/mikurag}
+  MIKURAG_REDIS_URL: ${MIKURAG_REDIS_URL:-redis://redis:6379/0}
+  MIKURAG_UPLOAD_DIR: ${MIKURAG_UPLOAD_DIR:-/data/uploads}
+  MIKURAG_SESSION_SECRET: ${MIKURAG_SESSION_SECRET:?Set MIKURAG_SESSION_SECRET in .env}
+  MIKURAG_ENCRYPTION_MASTER_KEY: ${MIKURAG_ENCRYPTION_MASTER_KEY:?Set MIKURAG_ENCRYPTION_MASTER_KEY in .env}
+  MIKURAG_CORS_ORIGINS: ${MIKURAG_CORS_ORIGINS:-["http://localhost:5173"]}
+  MIKURAG_MAX_UPLOAD_BYTES: ${MIKURAG_MAX_UPLOAD_BYTES:-52428800}
+  MIKURAG_MAX_DOCUMENT_PAGES: ${MIKURAG_MAX_DOCUMENT_PAGES:-500}
+  MIKURAG_EMBEDDING_ENDPOINT: ${MIKURAG_EMBEDDING_ENDPOINT:-https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding}
+  MIKURAG_EMBEDDING_MODEL_ID: ${MIKURAG_EMBEDDING_MODEL_ID:-tongyi-embedding-vision-flash-2026-03-06}
+  MIKURAG_EMBEDDING_API_KEY: ${MIKURAG_EMBEDDING_API_KEY:-}
+  MIKURAG_GENERATION_BASE_URL: ${MIKURAG_GENERATION_BASE_URL:-http://host.docker.internal:11434/v1}
+  MIKURAG_GENERATION_MODEL_ID: ${MIKURAG_GENERATION_MODEL_ID:-DeepSeek-R1-Distill-Qwen-7B}
+  MIKURAG_GENERATION_API_KEY: ${MIKURAG_GENERATION_API_KEY:-}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mikurag}
+      POSTGRES_USER: ${POSTGRES_USER:-mikurag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment: *backend-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ["tools"]
+
+  backend:
+    build: ./backend
+    environment: *backend-environment
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/live')"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    command: ["celery", "-A", "app.celery_app:celery_app", "worker", "--loglevel=INFO"]
+    environment: *backend-environment
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  uploads:
