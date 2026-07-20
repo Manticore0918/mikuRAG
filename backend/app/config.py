@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     login_attempt_limit: int = Field(default=5, ge=1, le=20)
     login_attempt_window_seconds: int = Field(default=300, ge=60, le=3_600)
     max_upload_bytes: int = Field(default=52_428_800, ge=1_048_576, le=104_857_600)
+    upload_part_bytes: int = Field(default=5_242_880, ge=1_048_576, le=10_485_760)
+    upload_session_ttl_seconds: int = Field(default=86_400, ge=3_600, le=604_800)
+    max_active_upload_sessions: int = Field(default=20, ge=1, le=100)
     max_document_pages: int = Field(default=500, ge=1, le=2_000)
     chunk_target_characters: int = Field(default=800, ge=500, le=8_000)
     chunk_overlap_characters: int = Field(default=100, ge=0, le=1_000)
@@ -98,6 +101,8 @@ class Settings(BaseSettings):
     def require_smaller_chunk_overlap(self) -> "Settings":
         if self.chunk_overlap_characters >= self.chunk_target_characters:
             raise ValueError("chunk_overlap_characters must be smaller than the chunk target")
+        if self.upload_part_bytes > self.max_upload_bytes:
+            raise ValueError("upload_part_bytes cannot exceed max_upload_bytes")
         return self
 
 

@@ -41,6 +41,8 @@ The MVP is complete when an Administrator can configure providers, create Users 
 
 - Supported: text-extractable PDF, DOCX, TXT, and Markdown.
 - Rejected: scanned/image-only documents, unsupported formats, files over 50 MB, and documents over 500 pages.
+- Uploads use durable, sequential 5 MiB parts. A server-confirmed checkpoint survives network loss, page reload, and API restart for 24 hours after the most recent activity.
+- Incomplete uploads are visible to Administrators but are not Documents. Finalization verifies size, SHA-256, and format before atomically creating a Pending Document.
 - Deferred: OCR, images, diagrams, charts, video, document editing, and visual question answering.
 - Visible lifecycle: Pending, Processing, Ready, or Failed.
 - Only Ready Documents participate in retrieval; partial Ingestion is never visible.
@@ -77,6 +79,7 @@ Each turn performs fresh retrieval. Conversation history may resolve references 
 - Worker: Celery with Redis as broker.
 - Data: PostgreSQL with pgvector.
 - Original Documents: persistent filesystem volume with opaque server-generated paths.
+- Incomplete upload bytes: opaque temporary paths on the same persistent volume; PostgreSQL is authoritative for confirmed offsets and expiry.
 - Model generation: external Ollama service through an OpenAI-compatible HTTP endpoint.
 - API style: REST for management and Server-Sent Events for streamed answer events.
 - Packaging: Docker Compose services for frontend, API, worker, PostgreSQL/pgvector, and Redis. Ollama remains external.
@@ -89,6 +92,8 @@ The API is the sole authorization boundary. The frontend, worker payloads, docum
 - Knowledge Base: name, description, lifecycle timestamps.
 - Knowledge Base Access: User-to-Knowledge-Base grant.
 - Document: Knowledge Base, original name, storage identity, checksum, media type, size, page count, Ingestion state, safe error, timestamps.
+- Upload Session: Knowledge Base, initiator, safe original name, expected size/checksum, confirmed offset, opaque temporary/final identities, expiry, status, and resulting Document.
+- Upload Part Receipt: Upload Session, byte offset, length, and checksum for idempotent retry handling.
 - Chunk: Document, ordered text, page/section locator, lexical-search data, embedding, embedding version.
 - Conversation: owner, immutable Knowledge Base, title, timestamps.
 - Message: Conversation, role, content, completion/failure state, model metadata, timestamps.
@@ -103,6 +108,7 @@ All retrieval queries include the authorized Knowledge Base identifier before ra
 - 10,000 Documents or 100,000 text pages total.
 - 20 active Users; generation concurrency is bounded by the configured Ollama capacity.
 - Ingestion can queue without blocking chat retrieval.
+- At most 20 incomplete Upload Sessions are retained at once, bounding temporary upload data to approximately 1 GB under the 50 MB Document limit.
 - Large-scale horizontal scaling and high availability are outside the MVP.
 
 ## Security baseline
@@ -111,6 +117,7 @@ All retrieval queries include the authorized Knowledge Base identifier before ra
 - CSRF protection for cookie-authenticated mutations, login throttling, and upload size/type validation.
 - Authorization checks on every Knowledge Base, Document, Conversation, Citation, and streaming endpoint.
 - No original filename is used as a filesystem path.
+- Upload Parts are accepted only at the server-confirmed offset and are checked against their declared length and SHA-256 before the checkpoint advances.
 - Provider errors and worker failures expose safe messages to the UI and retain detailed server-side logs without secrets or Document content.
 - HTTPS is required outside localhost and terminated by an operator-managed reverse proxy.
 
@@ -151,6 +158,7 @@ Add end-to-end authorization and RAG fixtures, failure/retry tests, capacity smo
 - API keys and encryption keys do not appear in responses, logs, Redis payloads, or exported diagnostics.
 - The documented backup can restore accounts, permissions, Knowledge Bases, Documents, vectors, and Conversations on a clean Installation.
 - The system remains usable for chat retrieval while Ingestion jobs are queued within the agreed capacity envelope.
+- An interrupted upload resumes from the server-confirmed checkpoint after the same file is reselected; expired, cancelled, corrupt, and orphaned temporary bytes are removed.
 
 ## Explicit non-goals
 

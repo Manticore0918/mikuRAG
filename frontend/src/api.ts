@@ -31,6 +31,29 @@ export type DocumentRecord = {
   updated_at: string
 }
 
+export type UploadSession = {
+  id: string
+  knowledge_base_id: string
+  initiated_by_id: string | null
+  initiated_by_username: string | null
+  original_name: string
+  declared_sha256: string
+  total_bytes: number
+  received_bytes: number
+  part_size_bytes: number
+  status: 'open' | 'completed' | 'failed'
+  safe_error: string | null
+  resulting_document_id: string | null
+  expires_at: string
+  created_at: string
+  updated_at: string
+}
+
+export type UploadPartResult = {
+  next_offset: number
+  expires_at: string
+}
+
 export type Conversation = {
   id: string
   knowledge_base_id: string
@@ -88,11 +111,12 @@ async function parseError(response: Response): Promise<string> {
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData
+  const isJsonBody = typeof init?.body === 'string'
   const response = await fetch(`/api/v1${path}`, {
     credentials: 'include',
     ...init,
     headers: {
-      ...(init?.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
+      ...(isJsonBody && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...init?.headers,
     },
   })
@@ -123,6 +147,25 @@ export async function mutateForm<T>(path: string, method: string, body: FormData
     method,
     body,
     headers: { 'X-CSRF-Token': csrf },
+  })
+}
+
+export async function mutateBinary<T>(
+  path: string,
+  body: Blob,
+  headers: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const csrf = await csrfToken()
+  return request<T>(path, {
+    method: 'PUT',
+    body,
+    signal,
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'X-CSRF-Token': csrf,
+      ...headers,
+    },
   })
 }
 

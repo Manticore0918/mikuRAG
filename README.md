@@ -37,6 +37,10 @@ Set `MIKURAG_EMBEDDING_API_KEY` before ingesting Documents. The worker calls the
 
 Administrators can upload, inspect, retry, and delete text-extractable PDF, DOCX, TXT, and Markdown Documents. Files are limited to 50 MB and PDFs to 500 pages. Scanned or image-only files fail safely because OCR is outside this MVP.
 
+Uploads are split into sequential 5 MiB parts. PostgreSQL records the confirmed byte offset and the persistent upload volume retains incomplete bytes, so a transfer can resume after network loss, page reload, or API restart. The Administrator reselects the same file after a reload; mikuRAG verifies its SHA-256 before continuing. Open Upload Sessions expire after 24 hours without activity, and the scheduled `beat` service removes expired or orphaned temporary data hourly.
+
+A source becomes a Document only after all bytes arrive and the server independently verifies its total size, SHA-256, and format. At most 20 Upload Sessions can remain open across the Installation, while the existing 50 MB and 500-page limits remain unchanged.
+
 PostgreSQL is authoritative for `pending`, `processing`, `ready`, `failed`, and `deleting` states. Chunks and vectors are committed only when a Document becomes `ready`. Deletion changes the state to `deleting` before background removal, allowing retrieval to exclude it immediately.
 
 ## Grounded chat

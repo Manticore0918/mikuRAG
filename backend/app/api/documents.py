@@ -3,18 +3,15 @@ import uuid
 from typing import Annotated
 
 from celery.exceptions import CeleryError
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from kombu.exceptions import OperationalError as KombuOperationalError
 from redis.exceptions import RedisError
-from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy import select
 
 from app.api.admin import require_knowledge_base
-from app.config import get_settings
 from app.dependencies import Administrator, DatabaseSession
-from app.ingestion.errors import UploadValidationError
-from app.ingestion.storage import persist_upload, remove_stored_file
-from app.ingestion.tasks import ingest_document, purge_document
+from app.ingestion.dispatch import enqueue_ingestion
+from app.ingestion.tasks import purge_document
 from app.models import Document, DocumentStatus
 from app.schemas import DocumentRead
 from app.security import require_csrf
@@ -40,15 +37,6 @@ async def require_document(
     return document
 
 
-def _enqueue_ingestion(document: Document) -> bool:
-    try:
-        ingest_document.delay(str(document.id))
-        return True
-    except (CeleryError, KombuOperationalError, RedisError, OSError):
-        logger.error("Could not enqueue Document ingestion for %s", document.id)
-        return False
-
-
 @router.get("/{knowledge_base_id}/documents", response_model=list[DocumentRead])
 async def list_documents(
     knowledge_base_id: uuid.UUID,
@@ -62,66 +50,6 @@ async def list_documents(
         .order_by(Document.created_at.desc())
     )
     return list(result)
-
-
-@router.post(
-    "/{knowledge_base_id}/documents",
-    response_model=DocumentRead,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def upload_document(
-    knowledge_base_id: uuid.UUID,
-    _csrf: CsrfCheck,
-    _: Administrator,
-    session: DatabaseSession,
-    file: Annotated[UploadFile, File(description="PDF, DOCX, TXT, or Markdown")],
-) -> Document:
-    settings = get_settings()
-    await require_knowledge_base(session, knowledge_base_id)
-    document_count = await session.scalar(select(func.count()).select_from(Document))
-    if document_count is not None and document_count >= 10_000:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="The Installation has reached the 10,000 Document MVP limit",
-        )
-    try:
-        stored = await persist_upload(file, settings.upload_dir, settings.max_upload_bytes)
-    except UploadValidationError as error:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=error.safe_message,
-        ) from error
-
-    document = Document(
-        knowledge_base_id=knowledge_base_id,
-        original_name=stored.original_name,
-        storage_key=stored.storage_key,
-        sha256=stored.sha256,
-        media_type=stored.media_type,
-        size_bytes=stored.size_bytes,
-        status=DocumentStatus.PENDING,
-    )
-    session.add(document)
-    try:
-        await session.commit()
-    except IntegrityError as error:
-        await session.rollback()
-        await remove_stored_file(settings.upload_dir, stored.storage_key)
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This Document already exists in the selected Knowledge Base",
-        ) from error
-    except SQLAlchemyError:
-        await session.rollback()
-        await remove_stored_file(settings.upload_dir, stored.storage_key)
-        raise
-    await session.refresh(document)
-    if not _enqueue_ingestion(document):
-        document.status = DocumentStatus.FAILED
-        document.safe_error = "The ingestion queue is unavailable. Retry this Document later."
-        await session.commit()
-        await session.refresh(document)
-    return document
 
 
 @router.post(
@@ -146,7 +74,7 @@ async def retry_document(
     document.safe_error = None
     await session.commit()
     await session.refresh(document)
-    if not _enqueue_ingestion(document):
+    if not enqueue_ingestion(document.id):
         document.status = DocumentStatus.FAILED
         document.safe_error = "The ingestion queue is unavailable. Retry this Document later."
         await session.commit()

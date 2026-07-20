@@ -9,6 +9,9 @@ x-backend-environment: &backend-environment
   MIKURAG_ENCRYPTION_MASTER_KEY: ${MIKURAG_ENCRYPTION_MASTER_KEY:?Set MIKURAG_ENCRYPTION_MASTER_KEY in .env}
   MIKURAG_CORS_ORIGINS: ${MIKURAG_CORS_ORIGINS:-["http://localhost:5173"]}
   MIKURAG_MAX_UPLOAD_BYTES: ${MIKURAG_MAX_UPLOAD_BYTES:-52428800}
+  MIKURAG_UPLOAD_PART_BYTES: ${MIKURAG_UPLOAD_PART_BYTES:-5242880}
+  MIKURAG_UPLOAD_SESSION_TTL_SECONDS: ${MIKURAG_UPLOAD_SESSION_TTL_SECONDS:-86400}
+  MIKURAG_MAX_ACTIVE_UPLOAD_SESSIONS: ${MIKURAG_MAX_ACTIVE_UPLOAD_SESSIONS:-20}
   MIKURAG_MAX_DOCUMENT_PAGES: ${MIKURAG_MAX_DOCUMENT_PAGES:-500}
   MIKURAG_EMBEDDING_ENDPOINT: ${MIKURAG_EMBEDDING_ENDPOINT:-https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding}
   MIKURAG_EMBEDDING_MODEL_ID: ${MIKURAG_EMBEDDING_MODEL_ID:-tongyi-embedding-vision-flash-2026-03-06}
@@ -74,6 +77,19 @@ services:
   worker:
     build: ./backend
     command: ["celery", "-A", "app.celery_app:celery_app", "worker", "--loglevel=INFO"]
+    environment: *backend-environment
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  beat:
+    build: ./backend
+    command: ["celery", "-A", "app.celery_app:celery_app", "beat", "--loglevel=INFO"]
     environment: *backend-environment
     volumes:
       - uploads:/data/uploads

@@ -1,0 +1,3 @@
+# Use durable first-party resumable Document uploads
+
+mikuRAG will replace its one-request Document upload with a first-party resumable protocol: PostgreSQL records Upload Sessions and idempotent part receipts, the persistent upload volume holds opaque temporary bytes, and the browser sends sequential 5 MiB parts before an integrity-checked finalization creates the Document. This custom boundary was chosen over retaining the fragile multipart route or adopting a general third-party upload standard because the private browser workflow needs tight Knowledge Base authorization, Document finalization, bounded 50 MB capacity, and crash recovery without a broader interoperability contract; the consequence is that mikuRAG owns the protocol, cleanup, and recovery tests.

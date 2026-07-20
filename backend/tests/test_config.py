@@ -43,6 +43,16 @@ def test_rejects_chunk_overlap_larger_than_target() -> None:
         )
 
 
+def test_upload_part_size_must_fit_within_document_limit() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            session_secret="s" * 32,
+            encryption_master_key="e" * 32,
+            max_upload_bytes=1_048_576,
+            upload_part_bytes=5_242_880,
+        )
+
+
 def test_empty_embedding_key_is_treated_as_unconfigured() -> None:
     settings = Settings(
         session_secret="s" * 32,

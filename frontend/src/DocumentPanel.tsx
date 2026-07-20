@@ -1,12 +1,13 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   mutate,
-  mutateForm,
   request,
   type DocumentRecord,
   type KnowledgeBase,
+  type UploadSession,
 } from './api'
+import { sha256Hex, transferUpload, UploadPausedError } from './uploads'
 
 type Props = {
   knowledgeBases: KnowledgeBase[]
@@ -14,18 +15,34 @@ type Props = {
   onNotice: (message: string) => void
 }
 
+type LocalTransfer = {
+  file: File
+  sessionId: string | null
+  phase: 'hashing' | 'uploading' | 'paused'
+}
+
 const activeStatuses = new Set<DocumentRecord['status']>(['pending', 'processing', 'deleting'])
+const acceptedTypes = '.pdf,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown'
 
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function progress(upload: UploadSession) {
+  return Math.min(100, Math.floor((upload.received_bytes / upload.total_bytes) * 100))
+}
+
 export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Props) {
   const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState('')
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
+  const [uploadSessions, setUploadSessions] = useState<UploadSession[]>([])
   const [file, setFile] = useState<File | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [localTransfer, setLocalTransfer] = useState<LocalTransfer | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const pausedRef = useRef(false)
+  const cancelledRef = useRef(new Set<string>())
 
   const knowledgeBaseId = knowledgeBases.some(
     (knowledgeBase) => knowledgeBase.id === selectedKnowledgeBaseId,
@@ -34,27 +51,50 @@ export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Pro
   const load = useCallback(async (activeKnowledgeBaseId: string) => {
     if (!activeKnowledgeBaseId) {
       setDocuments([])
+      setUploadSessions([])
       return
     }
     try {
-      setDocuments(await request<DocumentRecord[]>(`/admin/knowledge-bases/${activeKnowledgeBaseId}/documents`))
+      const [nextDocuments, nextUploads] = await Promise.all([
+        request<DocumentRecord[]>(`/admin/knowledge-bases/${activeKnowledgeBaseId}/documents`),
+        request<UploadSession[]>(`/admin/knowledge-bases/${activeKnowledgeBaseId}/document-uploads`),
+      ])
+      setDocuments(nextDocuments)
+      setUploadSessions(nextUploads)
     } catch (reason) {
       onError(reason instanceof Error ? reason.message : 'Unable to load Documents')
     }
   }, [onError])
 
   useEffect(() => {
-    if (!knowledgeBaseId) return
     let active = true
-    void request<DocumentRecord[]>(`/admin/knowledge-bases/${knowledgeBaseId}/documents`)
-      .then((result) => { if (active) setDocuments(result) })
-      .catch((reason) => { if (active) onError(reason instanceof Error ? reason.message : 'Unable to load Documents') })
+    if (!knowledgeBaseId) {
+      queueMicrotask(() => {
+        if (active) {
+          setDocuments([])
+          setUploadSessions([])
+        }
+      })
+      return () => { active = false }
+    }
+    void Promise.all([
+      request<DocumentRecord[]>(`/admin/knowledge-bases/${knowledgeBaseId}/documents`),
+      request<UploadSession[]>(`/admin/knowledge-bases/${knowledgeBaseId}/document-uploads`),
+    ]).then(([nextDocuments, nextUploads]) => {
+      if (active) {
+        setDocuments(nextDocuments)
+        setUploadSessions(nextUploads)
+      }
+    }).catch((reason) => {
+      if (active) onError(reason instanceof Error ? reason.message : 'Unable to load Documents')
+    })
     return () => { active = false }
   }, [knowledgeBaseId, onError])
 
   const hasActiveJobs = useMemo(
-    () => documents.some((document) => activeStatuses.has(document.status)),
-    [documents],
+    () => documents.some((document) => activeStatuses.has(document.status))
+      || uploadSessions.some((upload) => upload.status === 'open'),
+    [documents, uploadSessions],
   )
 
   useEffect(() => {
@@ -63,23 +103,112 @@ export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Pro
     return () => window.clearInterval(timer)
   }, [hasActiveJobs, knowledgeBaseId, load])
 
-  async function uploadDocument(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!file || !knowledgeBaseId) return
-    const form = event.currentTarget
-    const body = new FormData()
-    body.append('file', file)
-    setBusy(true)
+  const updateConfirmed = useCallback((sessionId: string, offset: number, expiresAt: string) => {
+    setUploadSessions((current) => current.map((upload) => upload.id === sessionId
+      ? { ...upload, received_bytes: offset, expires_at: expiresAt }
+      : upload))
+  }, [])
+
+  async function runTransfer(session: UploadSession, selectedFile: File) {
+    pausedRef.current = false
+    const controller = new AbortController()
+    abortRef.current = controller
+    setLocalTransfer({ file: selectedFile, sessionId: session.id, phase: 'uploading' })
     try {
-      await mutateForm<DocumentRecord>(`/admin/knowledge-bases/${knowledgeBaseId}/documents`, 'POST', body)
+      await transferUpload(
+        knowledgeBaseId,
+        session,
+        selectedFile,
+        controller.signal,
+        () => pausedRef.current,
+        (offset, expiresAt) => updateConfirmed(session.id, offset, expiresAt),
+      )
+      setLocalTransfer(null)
       setFile(null)
-      form.reset()
+      formRef.current?.reset()
       onNotice('Document uploaded and queued for Ingestion')
       await load(knowledgeBaseId)
     } catch (reason) {
-      onError(reason instanceof Error ? reason.message : 'Unable to upload Document')
+      if (cancelledRef.current.has(session.id)) {
+        setLocalTransfer(null)
+        return
+      }
+      if (reason instanceof UploadPausedError || pausedRef.current) {
+        setLocalTransfer({ file: selectedFile, sessionId: session.id, phase: 'paused' })
+      } else {
+        setLocalTransfer({ file: selectedFile, sessionId: session.id, phase: 'paused' })
+        onError(reason instanceof Error ? reason.message : 'Unable to upload Document')
+      }
     } finally {
-      setBusy(false)
+      if (abortRef.current === controller) abortRef.current = null
+    }
+  }
+
+  async function prepareFile(selectedFile: File, expected?: UploadSession) {
+    if (!knowledgeBaseId) return
+    setLocalTransfer({ file: selectedFile, sessionId: expected?.id || null, phase: 'hashing' })
+    try {
+      const digest = await sha256Hex(selectedFile)
+      if (expected && (expected.total_bytes !== selectedFile.size || expected.declared_sha256 !== digest)) {
+        throw new Error('The selected file does not match this Upload Session')
+      }
+      const session = expected
+        ? await mutate<UploadSession>(
+          `/admin/knowledge-bases/${knowledgeBaseId}/document-uploads/${expected.id}/resume`,
+          'POST',
+        )
+        : await mutate<UploadSession>(
+          `/admin/knowledge-bases/${knowledgeBaseId}/document-uploads`,
+          'POST',
+          { original_name: selectedFile.name, size_bytes: selectedFile.size, sha256: digest },
+        )
+      setUploadSessions((current) => [session, ...current.filter((item) => item.id !== session.id)])
+      await runTransfer(session, selectedFile)
+    } catch (reason) {
+      setLocalTransfer(null)
+      onError(reason instanceof Error ? reason.message : 'Unable to prepare Document upload')
+    }
+  }
+
+  function uploadDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (file) void prepareFile(file)
+  }
+
+  function pauseUpload() {
+    pausedRef.current = true
+    abortRef.current?.abort()
+    setLocalTransfer((current) => current ? { ...current, phase: 'paused' } : current)
+  }
+
+  async function resumeLocal(upload: UploadSession) {
+    if (!localTransfer || localTransfer.sessionId !== upload.id) return
+    try {
+      const session = await mutate<UploadSession>(
+        `/admin/knowledge-bases/${knowledgeBaseId}/document-uploads/${upload.id}/resume`,
+        'POST',
+      )
+      await runTransfer(session, localTransfer.file)
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : 'Unable to resume upload')
+    }
+  }
+
+  async function cancelUpload(upload: UploadSession) {
+    if (!window.confirm(`Cancel the upload of ${upload.original_name}?`)) return
+    cancelledRef.current.add(upload.id)
+    if (localTransfer?.sessionId === upload.id) pauseUpload()
+    try {
+      await mutate<void>(
+        `/admin/knowledge-bases/${knowledgeBaseId}/document-uploads/${upload.id}`,
+        'DELETE',
+      )
+      if (localTransfer?.sessionId === upload.id) setLocalTransfer(null)
+      onNotice('Upload Session cancelled and temporary bytes removed')
+      await load(knowledgeBaseId)
+    } catch (reason) {
+      cancelledRef.current.delete(upload.id)
+      onError(reason instanceof Error ? reason.message : 'Unable to cancel upload')
     }
   }
 
@@ -104,6 +233,8 @@ export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Pro
     }
   }
 
+  const browserBusy = localTransfer !== null && localTransfer.phase !== 'paused'
+
   return (
     <section className="admin-section" aria-labelledby="documents-title">
       <div className="section-title document-section-title">
@@ -112,28 +243,55 @@ export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Pro
           <p>Upload originals and inspect each Ingestion lifecycle.</p>
         </div>
         <label>Knowledge Base
-          <select value={knowledgeBaseId} onChange={(event) => setSelectedKnowledgeBaseId(event.target.value)}>
+          <select disabled={localTransfer !== null} value={knowledgeBaseId} onChange={(event) => setSelectedKnowledgeBaseId(event.target.value)}>
             {knowledgeBases.map((knowledgeBase) => <option key={knowledgeBase.id} value={knowledgeBase.id}>{knowledgeBase.name}</option>)}
           </select>
         </label>
       </div>
 
-      <form className="card document-upload" onSubmit={uploadDocument}>
+      <form ref={formRef} className="card document-upload" onSubmit={uploadDocument}>
         <div>
           <strong>Add a Document</strong>
-          <p>PDF, DOCX, TXT, or Markdown · 50 MB maximum · text extraction only</p>
+          <p>PDF, DOCX, TXT, or Markdown · 50 MB maximum · resumable upload</p>
           <p className="privacy-boundary">Extracted text leaves this Installation for embedding with Alibaba Model Studio.</p>
         </div>
         <input
           aria-label="Choose Document"
           type="file"
-          accept=".pdf,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
-          disabled={!knowledgeBaseId || busy}
+          accept={acceptedTypes}
+          disabled={!knowledgeBaseId || browserBusy}
           onChange={(event) => setFile(event.target.files?.[0] || null)}
           required
         />
-        <button className="primary" disabled={!file || !knowledgeBaseId || busy}>{busy ? 'Uploading…' : 'Upload and ingest'}</button>
+        <button className="primary" disabled={!file || !knowledgeBaseId || browserBusy}>
+          {localTransfer?.phase === 'hashing' ? 'Verifying…' : browserBusy ? 'Uploading…' : 'Upload and ingest'}
+        </button>
       </form>
+
+      {!!uploadSessions.length && <div className="card upload-session-list" aria-labelledby="uploads-title">
+        <div className="upload-session-heading">
+          <div><strong id="uploads-title">Uploads in progress</strong><p>Checkpoints expire after 24 hours without activity.</p></div>
+        </div>
+        {uploadSessions.map((upload) => {
+          const local = localTransfer?.sessionId === upload.id ? localTransfer : null
+          const state = upload.status === 'failed' ? 'Failed' : local?.phase === 'uploading' ? 'Uploading' : local?.phase === 'hashing' ? 'Verifying' : local?.phase === 'paused' ? 'Paused' : 'Waiting for file'
+          return <div className="upload-session" key={upload.id}>
+            <div className="upload-session-copy">
+              <strong>{upload.original_name}</strong>
+              <small>{formatBytes(upload.received_bytes)} of {formatBytes(upload.total_bytes)} confirmed · {state}</small>
+              <small>Started by {upload.initiated_by_username || 'a former Administrator'} · expires {new Date(upload.expires_at).toLocaleString()}</small>
+              {upload.safe_error && <span className="document-error">{upload.safe_error}</span>}
+            </div>
+            <div className="upload-progress" aria-label={`${progress(upload)}% uploaded`}><span style={{ width: `${progress(upload)}%` }} /></div>
+            <div className="document-actions">
+              {local?.phase === 'uploading' && <button type="button" onClick={pauseUpload}>Pause</button>}
+              {local?.phase === 'paused' && upload.status === 'open' && <button type="button" onClick={() => void resumeLocal(upload)}>Resume</button>}
+              {!local && upload.status === 'open' && <label className="file-resume-button">Select file to resume<input type="file" accept={acceptedTypes} onChange={(event) => { const selected = event.target.files?.[0]; if (selected) void prepareFile(selected, upload) }} /></label>}
+              <button type="button" className="danger-link" onClick={() => void cancelUpload(upload)}>{upload.status === 'failed' ? 'Dismiss' : 'Cancel'}</button>
+            </div>
+          </div>
+        })}
+      </div>}
 
       {!knowledgeBases.length && <div className="empty-state">Create a Knowledge Base before uploading Documents.</div>}
       {!!knowledgeBases.length && !documents.length && <div className="empty-state">No Documents in this Knowledge Base yet.</div>}

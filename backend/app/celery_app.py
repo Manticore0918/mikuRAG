@@ -7,7 +7,7 @@ settings = get_settings()
 celery_app = Celery(
     "mikurag",
     broker=settings.redis_url,
-    include=["app.ingestion.tasks"],
+    include=["app.ingestion.tasks", "app.uploads.tasks"],
 )
 celery_app.conf.update(
     accept_content=["json"],
@@ -19,6 +19,12 @@ celery_app.conf.update(
     task_serializer="json",
     timezone="UTC",
     worker_prefetch_multiplier=1,
+    beat_schedule={
+        "cleanup-expired-upload-sessions": {
+            "task": "mikurag.uploads.cleanup",
+            "schedule": 3600.0,
+        }
+    },
 )
 
 

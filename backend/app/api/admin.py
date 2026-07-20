@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -6,7 +7,14 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.dependencies import Administrator, DatabaseSession
-from app.models import Document, KnowledgeBase, KnowledgeBaseAccess, User
+from app.models import (
+    Document,
+    KnowledgeBase,
+    KnowledgeBaseAccess,
+    UploadSession,
+    UploadSessionStatus,
+    User,
+)
 from app.schemas import (
     AccessGrantRead,
     KnowledgeBaseCreate,
@@ -200,6 +208,18 @@ async def delete_knowledge_base(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Delete every Document in this Knowledge Base before deleting it",
+        )
+    upload_count = await session.scalar(
+        select(func.count()).select_from(UploadSession).where(
+            UploadSession.knowledge_base_id == knowledge_base_id,
+            UploadSession.status == UploadSessionStatus.OPEN,
+            UploadSession.expires_at > datetime.now(UTC),
+        )
+    )
+    if upload_count:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cancel every active Upload Session before deleting this Knowledge Base",
         )
     await session.delete(knowledge_base)
     await session.commit()

@@ -87,6 +87,17 @@ td small { margin-top: .25rem; color: #74727f; }
 .document-upload strong { display: block; margin-bottom: .35rem; }
 .document-upload p { margin: .2rem 0; color: #858391; font-size: .78rem; }
 .document-upload .privacy-boundary { color: #d5b879; }
+.upload-session-list { display: grid; gap: 0; padding: 0 1.15rem; }
+.upload-session-heading { padding: 1rem 0; border-bottom: 1px solid #282c39; }
+.upload-session-heading p { margin: .25rem 0 0; color: #858391; font-size: .76rem; }
+.upload-session { display: grid; grid-template-columns: minmax(16rem, 1fr) minmax(9rem, .55fr) auto; align-items: center; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid #282c39; }
+.upload-session:last-child { border-bottom: 0; }
+.upload-session-copy strong, .upload-session-copy small { display: block; }
+.upload-session-copy small { margin-top: .25rem; color: #777684; font-size: .72rem; }
+.upload-progress { height: .55rem; overflow: hidden; background: #10131c; border: 1px solid #303544; border-radius: 999px; }
+.upload-progress span { display: block; height: 100%; background: #6ce5d0; border-radius: inherit; transition: width .2s ease; }
+.file-resume-button { display: inline-flex; min-height: 2.2rem; align-items: center; padding: 0 .7rem; color: #bbb9c5; background: #202430; border: 1px solid #303544; border-radius: .55rem; cursor: pointer; font-size: .82rem; }
+.file-resume-button input { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; opacity: 0; pointer-events: none; }
 .document-table td:first-child { min-width: 18rem; }
 .document-error { display: block; max-width: 42rem; margin-top: .5rem; color: #f2a6b8; font-size: .76rem; line-height: 1.45; }
 .status-badge { display: inline-flex; align-items: center; padding: .32rem .58rem; border: 1px solid transparent; border-radius: 999px; font-size: .68rem; font-weight: 800; text-transform: uppercase; }
@@ -146,6 +157,7 @@ td small { margin-top: .25rem; color: #74727f; }
   .document-section-title { align-items: stretch; }
   .document-section-title label { min-width: 0; }
   .document-upload { grid-template-columns: 1fr; }
+  .upload-session { grid-template-columns: 1fr; }
   .chat-shell { height: auto; min-height: calc(100vh - 7.9rem); grid-template-columns: 1fr; overflow: visible; }
   .conversation-sidebar { max-height: 19rem; border-right: 0; border-bottom: 1px solid #252936; }
   .chat-main { min-height: 40rem; }

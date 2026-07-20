@@ -92,6 +92,45 @@ class DocumentRead(BaseModel):
     updated_at: datetime
 
 
+class UploadSessionCreate(BaseModel):
+    original_name: str = Field(min_length=1, max_length=255)
+    size_bytes: int = Field(gt=0)
+    sha256: str = Field(pattern=r"^[A-Fa-f0-9]{64}$")
+
+    @field_validator("original_name")
+    @classmethod
+    def clean_original_name(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("sha256")
+    @classmethod
+    def normalize_sha256(cls, value: str) -> str:
+        return value.lower()
+
+
+class UploadSessionRead(BaseModel):
+    id: uuid.UUID
+    knowledge_base_id: uuid.UUID
+    initiated_by_id: uuid.UUID | None
+    initiated_by_username: str | None
+    original_name: str
+    declared_sha256: str
+    total_bytes: int
+    received_bytes: int
+    part_size_bytes: int
+    status: str
+    safe_error: str | None
+    resulting_document_id: uuid.UUID | None
+    expires_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
+class UploadPartRead(BaseModel):
+    next_offset: int
+    expires_at: datetime
+
+
 class ConversationCreate(BaseModel):
     knowledge_base_id: uuid.UUID
 
