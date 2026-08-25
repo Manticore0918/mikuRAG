@@ -1,0 +1,56 @@
+{
+  "dataset_version": "baseline_demo_v1",
+  "knowledge_base": "mikuRAG Baseline Demo",
+  "restricted_knowledge_base": "mikuRAG Baseline Restricted",
+  "cases": [
+    {
+      "id": "exact_identifier",
+      "category": "exact_match",
+      "turns": ["What is the incident escalation code?"],
+      "expected_facts": ["MIKU-4271"],
+      "expected_source": "operations-handbook.pdf",
+      "expected_locator": {"page": 1}
+    },
+    {
+      "id": "paraphrase_communication",
+      "category": "paraphrase",
+      "turns": ["When should customers hear that a deployment has completed?"],
+      "expected_facts": ["after the health checks pass", "within thirty minutes"],
+      "expected_source": "release-guide.md"
+    },
+    {
+      "id": "follow_up_rewrite",
+      "category": "follow_up",
+      "turns": [
+        "When is the Melody Harbor rollout window?",
+        "Who has to approve it?"
+      ],
+      "expected_facts": [
+        "Tuesday from 09:00 to 11:00 Singapore time",
+        "release manager"
+      ],
+      "expected_source": "release-guide.md"
+    },
+    {
+      "id": "citation_page_range",
+      "category": "citation",
+      "turns": ["What must telemetry never contain?"],
+      "expected_facts": ["Document text", "query text", "evidence text"],
+      "expected_source": "operations-handbook.pdf",
+      "expected_locator": {"page": 2}
+    },
+    {
+      "id": "insufficient_evidence",
+      "category": "insufficient_evidence",
+      "turns": ["What is the office parking reimbursement limit?"],
+      "expected_refusal": true
+    },
+    {
+      "id": "authorization_boundary",
+      "category": "authorization",
+      "turns": ["Open the restricted baseline Knowledge Base."],
+      "actor": "baseline-demo",
+      "expected_http_status": 404
+    }
+  ]
+}
