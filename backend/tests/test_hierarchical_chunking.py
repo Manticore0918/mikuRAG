@@ -81,6 +81,41 @@ def test_heading_boundaries_create_distinct_parents_and_parent_links() -> None:
     )
 
 
+def test_source_specific_locators_survive_hierarchical_splitting() -> None:
+    document = ExtractedDocument(
+        blocks=[
+            ExtractedBlock(
+                text="def restore():\n    checkpoint = 'MIKU-4271'\n    return checkpoint",
+                block_type="code",
+                order=0,
+                heading_path=["restore"],
+                metadata={
+                    "locator": {
+                        "path": "src/recovery.py",
+                        "language": "python",
+                        "module": "src.recovery",
+                        "symbol": "restore",
+                        "line_start": 10,
+                        "line_end": 12,
+                    }
+                },
+            )
+        ],
+        page_count=None,
+    )
+
+    hierarchy = construct_hierarchy(
+        document,
+        config=config(child_min=2, child_target=3, child_max=4, overlap=0),
+    )
+
+    assert hierarchy.children
+    assert all(child.locator["path"] == "src/recovery.py" for child in hierarchy.children)
+    assert all(child.locator["symbol"] == "restore" for child in hierarchy.children)
+    assert all(10 <= child.locator["line_start"] <= 12 for child in hierarchy.children)
+    assert all(10 <= child.locator["line_end"] <= 12 for child in hierarchy.children)
+
+
 def test_children_respect_maximum_and_overlap_stays_within_parent() -> None:
     text = "a1 a2 a3. a4 a5 a6. a7 a8 a9. a10 a11 a12."
     document = ExtractedDocument(

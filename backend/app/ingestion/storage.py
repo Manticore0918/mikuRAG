@@ -12,13 +12,47 @@ from fastapi import UploadFile
 
 from app.ingestion.errors import UploadValidationError
 
-ALLOWED_SUFFIXES = {".pdf", ".docx", ".txt", ".md", ".markdown"}
 MEDIA_TYPES = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".txt": "text/plain",
     ".md": "text/markdown",
     ".markdown": "text/markdown",
+    ".htm": "text/html",
+    ".html": "text/html",
+    ".py": "text/x-python",
+    ".js": "text/javascript",
+    ".jsx": "text/jsx",
+    ".mjs": "text/javascript",
+    ".cjs": "text/javascript",
+    ".ts": "text/typescript",
+    ".tsx": "text/tsx",
+}
+ALLOWED_SUFFIXES = frozenset(MEDIA_TYPES)
+SOURCE_KINDS = {
+    ".pdf": "pdf",
+    ".docx": "docx",
+    ".txt": "text",
+    ".md": "markdown",
+    ".markdown": "markdown",
+    ".htm": "html",
+    ".html": "html",
+    ".py": "code",
+    ".js": "code",
+    ".jsx": "code",
+    ".mjs": "code",
+    ".cjs": "code",
+    ".ts": "code",
+    ".tsx": "code",
+}
+DEFAULT_LANGUAGES = {
+    ".py": "python",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".ts": "typescript",
+    ".tsx": "typescript",
 }
 MAX_DOCX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
 
@@ -49,6 +83,8 @@ def storage_path(upload_dir: Path, storage_key: str) -> Path:
 
 
 def validate_file_format(path: Path, suffix: str) -> str:
+    if suffix not in ALLOWED_SUFFIXES:
+        raise UploadValidationError("This Document format is not supported")
     if suffix == ".pdf":
         with path.open("rb") as handle:
             if handle.read(5) != b"%PDF-":
@@ -77,6 +113,24 @@ def validate_file_format(path: Path, suffix: str) -> str:
     return MEDIA_TYPES[suffix]
 
 
+def source_kind_for_suffix(suffix: str) -> str:
+    try:
+        return SOURCE_KINDS[suffix]
+    except KeyError as error:
+        raise UploadValidationError("This Document format is not supported") from error
+
+
+def language_for_suffix(suffix: str) -> str | None:
+    return DEFAULT_LANGUAGES.get(suffix)
+
+
+def supported_formats_message() -> str:
+    return (
+        "Supported formats are PDF, DOCX, TXT, Markdown, HTML, Python, TypeScript, "
+        "and JavaScript"
+    )
+
+
 async def persist_upload(
     upload: UploadFile,
     upload_dir: Path,
@@ -84,7 +138,7 @@ async def persist_upload(
 ) -> StoredUpload:
     suffix = Path((upload.filename or "").lower()).suffix
     if suffix not in ALLOWED_SUFFIXES:
-        raise UploadValidationError("Supported formats are PDF, DOCX, TXT, and Markdown")
+        raise UploadValidationError(supported_formats_message())
 
     root = await asyncio.to_thread(upload_dir.resolve)
     temporary_dir = root / ".tmp"

@@ -6,7 +6,7 @@ from pypdf import PdfWriter
 
 from app.ingestion.chunking import chunk_sections
 from app.ingestion.errors import ExtractionError
-from app.ingestion.extraction import ExtractedSection, extract_document
+from app.ingestion.extraction import EXTRACTOR_REGISTRY, ExtractedSection, extract_document
 
 
 def test_plain_text_extraction_accepts_a_single_trailing_newline(tmp_path: Path) -> None:
@@ -18,6 +18,123 @@ def test_plain_text_extraction_accepts_a_single_trailing_newline(tmp_path: Path)
     assert [block.text for block in extracted.blocks] == [
         "The upload checkpoint survived."
     ]
+    assert extracted.parser_version == "plain_text_v1"
+
+
+def test_extractor_registry_covers_every_checkpoint_one_media_type() -> None:
+    assert {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain",
+        "text/markdown",
+        "text/html",
+        "text/x-python",
+        "text/javascript",
+        "text/typescript",
+        "text/jsx",
+        "text/tsx",
+    }.issubset(EXTRACTOR_REGISTRY.media_types)
+
+
+def test_html_extraction_removes_noise_and_keeps_title_heading_and_element(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "runbook.html"
+    path.write_text(
+        """<!doctype html>
+<html><head><title>Recovery Runbook</title>
+<link rel="canonical" href="https://docs.example.test/recovery"></head>
+<body><nav>Ignore this menu</nav><main id="content"><h1>Restore</h1>
+<p>Use backup MIKU-4271.</p><script>steal('secret')</script></main></body></html>""",
+        encoding="utf-8",
+    )
+
+    extracted = extract_document(path, "text/html", 500, source_kind="html")
+
+    combined = " ".join(block.text for block in extracted.blocks)
+    assert "Recovery Runbook" in combined
+    assert "Use backup MIKU-4271" in combined
+    assert "Ignore this menu" not in combined
+    assert "steal" not in combined
+    assert extracted.parser_version == "html_stdlib_v1"
+    assert extracted.metadata == {
+        "title": "Recovery Runbook",
+        "canonical_uri": "https://docs.example.test/recovery",
+    }
+    paragraph = next(block for block in extracted.blocks if "MIKU-4271" in block.text)
+    assert paragraph.heading_path == ["Restore"]
+    assert "#content" in paragraph.metadata["locator"]["element"]
+    assert paragraph.metadata["locator"]["line_start"] == 5
+    assert paragraph.metadata["locator"]["text_start"] > 0
+    assert [warning.code for warning in extracted.warnings] == ["html_navigation_removed"]
+
+
+def test_python_extraction_keeps_repo_path_module_symbols_and_line_ranges(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "worker.py"
+    path.write_text(
+        "import asyncio\n\n"
+        "class Worker:\n"
+        "    def run(self):\n"
+        "        return 'MIKU-4271'\n\n"
+        "def healthcheck():\n"
+        "    return True\n",
+        encoding="utf-8",
+    )
+
+    extracted = extract_document(
+        path,
+        "text/x-python",
+        500,
+        source_kind="code",
+        source_path="src/jobs/worker.py",
+        language="python",
+    )
+
+    worker = next(
+        block
+        for block in extracted.blocks
+        if block.metadata["locator"].get("symbol") == "Worker"
+    )
+    locator = worker.metadata["locator"]
+    assert locator["path"] == "src/jobs/worker.py"
+    assert locator["module"] == "src.jobs.worker"
+    assert locator["line_start"] == 3
+    assert locator["line_end"] == 5
+    assert extracted.parser_version == "python_ast_v1"
+
+
+def test_malformed_python_has_a_safe_parser_error(tmp_path: Path) -> None:
+    path = tmp_path / "broken.py"
+    path.write_text("def broken(:\n    pass\n", encoding="utf-8")
+
+    with pytest.raises(ExtractionError, match="could not be parsed safely near line 1"):
+        extract_document(path, "text/x-python", 500, source_kind="code")
+
+
+def test_typescript_extraction_detects_top_level_symbols(tmp_path: Path) -> None:
+    path = tmp_path / "client.ts"
+    path.write_text(
+        "export interface Client { ready: boolean }\n\n"
+        "export async function connect() {\n  return 'MIKU-4271'\n}\n",
+        encoding="utf-8",
+    )
+
+    extracted = extract_document(
+        path,
+        "text/typescript",
+        500,
+        source_kind="code",
+        source_path="web/client.ts",
+        language="typescript",
+    )
+
+    assert [block.metadata["locator"].get("symbol") for block in extracted.blocks] == [
+        "Client",
+        "connect",
+    ]
+    assert extracted.blocks[1].metadata["locator"]["line_start"] == 3
 
 
 def test_markdown_extraction_preserves_heading_and_line_locator(tmp_path: Path) -> None:

@@ -34,6 +34,10 @@ class ExtractedDocument:
     blocks: list[ExtractedBlock]
     page_count: int | None
     warnings: list[ExtractionWarning] = field(default_factory=list)
+    parser_version: str | None = None
+    source_kind: str | None = None
+    language: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def sections(self) -> list[ExtractedSection]:

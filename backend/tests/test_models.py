@@ -30,6 +30,45 @@ def test_documents_have_status_scoped_knowledge_base_index() -> None:
     assert "documents_kb_status_idx" in indexes
 
 
+def test_documents_and_uploads_preserve_source_provenance_and_ingestion_progress() -> None:
+    documents = Base.metadata.tables["documents"]
+    uploads = Base.metadata.tables["upload_sessions"]
+    document_columns = {column.name for column in documents.columns}
+    upload_columns = {column.name for column in uploads.columns}
+    document_checks = {
+        constraint.name
+        for constraint in documents.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+
+    provenance_columns = {
+        "source_kind",
+        "language",
+        "tags",
+        "source_uri",
+        "source_path",
+        "source_metadata",
+    }
+    assert provenance_columns <= document_columns
+    assert provenance_columns <= upload_columns
+    assert {
+        "parser_version",
+        "chunking_version",
+        "ingestion_stage",
+        "ingestion_progress",
+        "ingestion_attempts",
+        "ingestion_warnings",
+    } <= document_columns
+    assert {
+        "documents_source_kind_ck",
+        "documents_ingestion_progress_ck",
+        "documents_ingestion_attempts_ck",
+        "documents_tags_array_ck",
+        "documents_source_metadata_object_ck",
+        "documents_ingestion_warnings_array_ck",
+    } <= document_checks
+
+
 def test_upload_sessions_have_checkpoint_and_open_digest_constraints() -> None:
     table = Base.metadata.tables["upload_sessions"]
     assert {"received_bytes", "expires_at", "resulting_document_id"} <= {

@@ -17,6 +17,13 @@ from app.ingestion.contracts import (
     ExtractionWarning,
 )
 from app.ingestion.errors import ExtractionError
+from app.ingestion.extractors.code import extract_javascript, extract_python
+from app.ingestion.extractors.html import extract_html
+from app.ingestion.extractors.registry import (
+    ExtractionContext,
+    ExtractorRegistry,
+    FunctionExtractor,
+)
 
 _HEADING_STYLE = re.compile(r"^Heading\s+([1-6])$", re.IGNORECASE)
 _MARKDOWN_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
@@ -470,12 +477,128 @@ def _extract_markdown_blocks(content: str) -> list[ExtractedBlock]:
     return blocks
 
 
-def extract_document(path: Path, media_type: str, max_pages: int) -> ExtractedDocument:
+def _pdf_extractor(context: ExtractionContext) -> ExtractedDocument:
+    return extract_pdf(context.path, context.max_pages)
+
+
+def _docx_extractor(context: ExtractionContext) -> ExtractedDocument:
+    return extract_docx(context.path, context.max_pages)
+
+
+def _plain_text_extractor(context: ExtractionContext) -> ExtractedDocument:
+    return extract_text(context.path, markdown=False)
+
+
+def _markdown_extractor(context: ExtractionContext) -> ExtractedDocument:
+    return extract_text(context.path, markdown=True)
+
+
+EXTRACTOR_REGISTRY = ExtractorRegistry(
+    [
+        FunctionExtractor(
+            media_types=frozenset({"application/pdf"}),
+            parser_version="pdf_pypdf_v1",
+            function=_pdf_extractor,
+        ),
+        FunctionExtractor(
+            media_types=frozenset(
+                {
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                }
+            ),
+            parser_version="docx_python_docx_v1",
+            function=_docx_extractor,
+        ),
+        FunctionExtractor(
+            media_types=frozenset({"text/plain"}),
+            parser_version="plain_text_v1",
+            function=_plain_text_extractor,
+        ),
+        FunctionExtractor(
+            media_types=frozenset({"text/markdown"}),
+            parser_version="markdown_v1",
+            function=_markdown_extractor,
+        ),
+        FunctionExtractor(
+            media_types=frozenset({"text/html"}),
+            parser_version="html_stdlib_v1",
+            function=extract_html,
+        ),
+        FunctionExtractor(
+            media_types=frozenset({"text/x-python"}),
+            parser_version="python_ast_v1",
+            function=extract_python,
+        ),
+        FunctionExtractor(
+            media_types=frozenset(
+                {
+                    "application/javascript",
+                    "text/javascript",
+                    "text/jsx",
+                    "text/tsx",
+                    "text/typescript",
+                }
+            ),
+            parser_version="javascript_symbols_v1",
+            function=extract_javascript,
+        ),
+    ]
+)
+
+
+def parser_version_for_media_type(media_type: str) -> str:
+    return EXTRACTOR_REGISTRY.resolve(media_type).parser_version
+
+
+def extract_document(
+    path: Path,
+    media_type: str,
+    max_pages: int,
+    *,
+    source_kind: str | None = None,
+    source_path: str | None = None,
+    source_uri: str | None = None,
+    language: str | None = None,
+) -> ExtractedDocument:
+    extractor = EXTRACTOR_REGISTRY.resolve(media_type)
+    effective_source_kind = source_kind or _source_kind_for_media_type(media_type)
+    context = ExtractionContext(
+        path=path,
+        media_type=media_type,
+        max_pages=max_pages,
+        source_kind=effective_source_kind,
+        source_path=source_path,
+        source_uri=source_uri,
+        language=language,
+    )
+    extracted = extractor.extract(context)
+    return replace(
+        extracted,
+        parser_version=extractor.parser_version,
+        source_kind=effective_source_kind,
+        language=language or extracted.language,
+    )
+
+
+def _source_kind_for_media_type(media_type: str) -> str:
     if media_type == "application/pdf":
-        return extract_pdf(path, max_pages)
+        return "pdf"
     if media_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        return extract_docx(path, max_pages)
-    return extract_text(path, markdown=media_type == "text/markdown")
+        return "docx"
+    if media_type == "text/markdown":
+        return "markdown"
+    if media_type == "text/html":
+        return "html"
+    if media_type in {
+        "application/javascript",
+        "text/javascript",
+        "text/jsx",
+        "text/tsx",
+        "text/typescript",
+        "text/x-python",
+    }:
+        return "code"
+    return "text"
 
 
 __all__ = [
@@ -488,4 +611,5 @@ __all__ = [
     "extract_docx",
     "extract_pdf",
     "extract_text",
+    "parser_version_for_media_type",
 ]

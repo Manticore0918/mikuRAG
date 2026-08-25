@@ -1,6 +1,7 @@
 import hashlib
 import json
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from sqlalchemy import delete, func, literal_column, update
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ingestion.chunking import TextChunk
 from app.ingestion.errors import IngestionError
 from app.ingestion.hierarchical_chunking import ConstructedHierarchy
+from app.ingestion.provenance import merge_locator
 from app.ingestion.summarization import GeneratedSummary
 from app.ingestion.tokenization import Tokenizer
 from app.models import Chunk, ChunkContentType, ChunkLevel
@@ -27,6 +29,7 @@ def build_hierarchical_chunk_models(
     hierarchy: ConstructedHierarchy,
     vectors: list[list[float]],
     embedding_model: str,
+    provenance: Mapping[str, object] | None = None,
 ) -> ChunkModelBatch:
     if len(vectors) != len(hierarchy.children):
         raise IngestionError("The embedding count does not match the child chunk count")
@@ -48,7 +51,7 @@ def build_hierarchical_chunk_models(
             chunk_level=ChunkLevel.PARENT,
             ordinal=parent.ordinal,
             text=parent.text,
-            locator=parent.locator,
+            locator=merge_locator(parent.locator, provenance),
             start_page=parent.start_page,
             end_page=parent.end_page,
             start_offset=parent.start_offset,
@@ -76,7 +79,7 @@ def build_hierarchical_chunk_models(
             chunk_level=ChunkLevel.CHILD,
             ordinal=child.ordinal,
             text=child.text,
-            locator=child.locator,
+            locator=merge_locator(child.locator, provenance),
             start_page=child.start_page,
             end_page=child.end_page,
             start_offset=child.start_offset,
@@ -104,6 +107,7 @@ def build_legacy_chunk_models(
     vectors: list[list[float]],
     embedding_model: str,
     tokenizer: Tokenizer,
+    provenance: Mapping[str, object] | None = None,
 ) -> ChunkModelBatch:
     if len(vectors) != len(chunks):
         raise IngestionError("The embedding count does not match the legacy chunk count")
@@ -121,7 +125,7 @@ def build_legacy_chunk_models(
                 chunk_level=ChunkLevel.CHILD,
                 ordinal=ordinal,
                 text=chunk.text,
-                locator=chunk.locator,
+                locator=merge_locator(chunk.locator, provenance),
                 start_page=start_page,
                 end_page=end_page,
                 heading_path=heading_path,
@@ -143,6 +147,7 @@ def build_summary_chunk_models(
     summaries: list[GeneratedSummary],
     vectors: list[list[float]],
     embedding_model: str,
+    provenance: Mapping[str, object] | None = None,
 ) -> list[Chunk]:
     if len(vectors) != len(summaries):
         raise IngestionError("The embedding count does not match the summary count")
@@ -169,6 +174,7 @@ def build_summary_chunk_models(
             locator["page"] = summary.start_page
         if source_parent_id is not None:
             locator["source_parent_id"] = str(source_parent_id)
+        locator = merge_locator(locator, provenance)
         models.append(
             Chunk(
                 id=_stable_chunk_id(

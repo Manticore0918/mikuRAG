@@ -28,8 +28,6 @@ case "$COMMAND" in
     python3 scripts/migration_smoke.py
     ;;
   seed)
-    : "${MIKURAG_DEMO_ADMIN_PASSWORD:?Set it to at least 12 characters}"
-    : "${MIKURAG_DEMO_USER_PASSWORD:?Set it to at least 12 characters}"
     docker compose run --rm \
       -e MIKURAG_DEMO_ADMIN_PASSWORD \
       -e MIKURAG_DEMO_USER_PASSWORD \
@@ -37,7 +35,7 @@ case "$COMMAND" in
     ;;
   smoke)
     docker compose run --rm backend python -m app.chunking_smoke
-    docker compose run --rm backend python -m app.demo_smoke
+    docker compose run --rm backend python -m app.demo_smoke --retrieval
     ;;
   restart-smoke)
     .venv/bin/python scripts/restart_smoke.py

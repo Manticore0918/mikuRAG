@@ -80,6 +80,12 @@ def make_upload(tmp_path, *, total_bytes: int) -> UploadSession:
         initiated_by_id=uuid.uuid4(),
         original_name="notes.txt",
         suffix=".txt",
+        source_kind="text",
+        language=None,
+        tags=["operations"],
+        source_uri="https://docs.example.test/notes",
+        source_path="docs/notes.txt",
+        source_metadata={"title": "Notes", "owner_email": "private@example.test"},
         declared_sha256=hashlib.sha256(b"test"[:total_bytes]).hexdigest(),
         total_bytes=total_bytes,
         received_bytes=0,
@@ -217,3 +223,9 @@ async def test_completion_creates_one_document_and_is_idempotent(tmp_path, monke
     assert await file_size(tmp_path, upload.temporary_storage_key) is None
     assert await file_size(tmp_path, upload.final_storage_key) == 4
     assert enqueued == [first.id]
+    assert first.source_kind == "text"
+    assert first.source_path == "docs/notes.txt"
+    assert first.tags == ["operations"]
+    assert first.source_metadata["title"] == "Notes"
+    assert first.ingestion_stage == "queued"
+    assert first.ingestion_progress == 0

@@ -61,12 +61,6 @@ try {
             Assert-NativeSuccess "Migration smoke"
         }
         "seed" {
-            if (-not $env:MIKURAG_DEMO_ADMIN_PASSWORD) {
-                throw "Set MIKURAG_DEMO_ADMIN_PASSWORD to at least 12 characters."
-            }
-            if (-not $env:MIKURAG_DEMO_USER_PASSWORD) {
-                throw "Set MIKURAG_DEMO_USER_PASSWORD to at least 12 characters."
-            }
             docker compose run --rm `
                 -e MIKURAG_DEMO_ADMIN_PASSWORD `
                 -e MIKURAG_DEMO_USER_PASSWORD `
@@ -76,7 +70,7 @@ try {
         "smoke" {
             docker compose run --rm backend python -m app.chunking_smoke
             Assert-NativeSuccess "Chunking smoke"
-            docker compose run --rm backend python -m app.demo_smoke
+            docker compose run --rm backend python -m app.demo_smoke --retrieval
             Assert-NativeSuccess "Demo smoke"
         }
         "restart-smoke" {

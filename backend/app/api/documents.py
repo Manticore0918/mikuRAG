@@ -72,10 +72,14 @@ async def retry_document(
         )
     document.status = DocumentStatus.PENDING
     document.safe_error = None
+    document.ingestion_stage = "queued"
+    document.ingestion_progress = 0
+    document.ingestion_warnings = []
     await session.commit()
     await session.refresh(document)
     if not enqueue_ingestion(document.id):
         document.status = DocumentStatus.FAILED
+        document.ingestion_stage = "failed"
         document.safe_error = "The ingestion queue is unavailable. Retry this Document later."
         await session.commit()
         await session.refresh(document)
@@ -96,6 +100,7 @@ async def delete_document(
     document = await require_document(session, knowledge_base_id, document_id)
     if document.status != DocumentStatus.DELETING:
         document.status = DocumentStatus.DELETING
+        document.ingestion_stage = "deleting"
         document.safe_error = None
         await session.commit()
     try:

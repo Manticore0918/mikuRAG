@@ -73,6 +73,7 @@ class _Segment:
     start_offset: int | None
     end_offset: int | None
     heading_path: list[str]
+    locator: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -162,6 +163,7 @@ def _segment_from_block(block: ExtractedBlock) -> _Segment:
         start_offset=start_offset,
         end_offset=end_offset,
         heading_path=list(block.heading_path),
+        locator=dict(block.metadata.get("locator", {})),
     )
 
 
@@ -283,6 +285,7 @@ def _segments_for_text_pieces(
                 text=piece,
                 start_offset=start_offset,
                 end_offset=end_offset,
+                locator=_slice_locator(source, relative_start, relative_end),
             )
         )
         cursor = relative_end
@@ -534,7 +537,7 @@ def _constructed_chunk(
     start_offset = _minimum_optional(segment.start_offset for segment in segments)
     end_offset = _maximum_optional(segment.end_offset for segment in segments)
     content_type = _content_type(segments, chunk_level)
-    locator: dict[str, object] = {}
+    locator = _merged_locator(segments)
     if start_page is not None:
         locator["start_page"] = start_page
     if end_page is not None:
@@ -568,6 +571,84 @@ def _constructed_chunk(
         locator=locator,
         source_block_orders=tuple(dict.fromkeys(segment.source_order for segment in segments)),
     )
+
+
+def _slice_locator(source: _Segment, relative_start: int, relative_end: int) -> dict[str, object]:
+    locator = dict(source.locator)
+    line_start = locator.get("line_start")
+    if type(line_start) is int and line_start > 0:
+        slice_start_line = line_start + source.text[:relative_start].count("\n")
+        slice_end_line = slice_start_line + source.text[relative_start:relative_end].count("\n")
+        locator["line_start"] = slice_start_line
+        locator["line_end"] = slice_end_line
+    text_start = locator.get("text_start")
+    if type(text_start) is int and text_start >= 0:
+        locator["text_start"] = text_start + relative_start
+        locator["text_end"] = text_start + relative_end
+    return locator
+
+
+def _merged_locator(segments: list[_Segment]) -> dict[str, object]:
+    locator: dict[str, object] = {}
+    stable_keys = (
+        "language",
+        "module",
+        "path",
+        "section",
+        "source_kind",
+        "source_path",
+        "source_uri",
+        "symbol",
+    )
+    for key in stable_keys:
+        values = [
+            segment.locator.get(key)
+            for segment in segments
+            if segment.locator.get(key) is not None
+        ]
+        if values and all(value == values[0] for value in values):
+            locator[key] = values[0]
+
+    elements = [
+        value
+        for segment in segments
+        if isinstance((value := segment.locator.get("element")), str) and value
+    ]
+    if elements:
+        if all(element == elements[0] for element in elements):
+            locator["element"] = elements[0]
+        else:
+            locator["element_start"] = elements[0]
+            locator["element_end"] = elements[-1]
+
+    _merge_integer_range(locator, segments, "line_start", "line_end", positive=True)
+    _merge_integer_range(locator, segments, "text_start", "text_end", positive=False)
+    return locator
+
+
+def _merge_integer_range(
+    locator: dict[str, object],
+    segments: list[_Segment],
+    start_key: str,
+    end_key: str,
+    *,
+    positive: bool,
+) -> None:
+    minimum = 1 if positive else 0
+    starts = [
+        value
+        for segment in segments
+        if type(value := segment.locator.get(start_key)) is int and value >= minimum
+    ]
+    ends = [
+        value
+        for segment in segments
+        if type(value := segment.locator.get(end_key)) is int and value >= minimum
+    ]
+    if starts:
+        locator[start_key] = min(starts)
+    if ends:
+        locator[end_key] = max(ends)
 
 
 def _join_segments(segments: list[_Segment]) -> str:

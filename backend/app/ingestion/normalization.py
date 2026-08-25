@@ -55,6 +55,10 @@ def normalize_document(document: ExtractedDocument) -> ExtractedDocument:
         blocks=ordered,
         page_count=document.page_count,
         warnings=warnings,
+        parser_version=document.parser_version,
+        source_kind=document.source_kind,
+        language=document.language,
+        metadata=dict(document.metadata),
     )
 
 

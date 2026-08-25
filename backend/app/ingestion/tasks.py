@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import uuid
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from time import perf_counter
 from typing import Literal
@@ -17,7 +17,7 @@ from app.config import Settings, get_settings
 from app.ingestion.chunking import chunk_sections
 from app.ingestion.embeddings import EmbeddingMetrics, embed_texts
 from app.ingestion.errors import EmbeddingProviderError, IngestionError
-from app.ingestion.extraction import extract_document
+from app.ingestion.extraction import extract_document, parser_version_for_media_type
 from app.ingestion.hierarchical_chunking import (
     HierarchicalChunkingConfig,
     construct_hierarchy,
@@ -29,6 +29,7 @@ from app.ingestion.persistence import (
     build_summary_chunk_models,
     replace_document_chunks,
 )
+from app.ingestion.provenance import chunk_provenance
 from app.ingestion.storage import remove_stored_file_sync, storage_path
 from app.ingestion.summarization import (
     SummaryGenerationError,
@@ -101,6 +102,9 @@ async def run_ingestion(
                 .values(
                     status=DocumentStatus.PROCESSING,
                     safe_error=None,
+                    ingestion_stage="extract",
+                    ingestion_progress=5,
+                    ingestion_attempts=Document.ingestion_attempts + 1,
                     updated_at=func.now(),
                 )
             )
@@ -122,6 +126,9 @@ async def run_ingestion(
                 return "skipped"
             path = storage_path(settings.upload_dir, document.storage_key)
             media_type = document.media_type
+            parser_version = parser_version_for_media_type(media_type)
+            document.parser_version = parser_version
+            await session.commit()
 
         stage = "extract"
         stage_started = perf_counter()
@@ -130,10 +137,24 @@ async def run_ingestion(
             path,
             media_type,
             settings.max_document_pages,
+            source_kind=document.source_kind,
+            source_path=document.source_path,
+            source_uri=document.source_uri,
+            language=document.language,
         )
         observation["extraction_duration_ms"] = _duration_ms(stage_started)
         observation["extracted_block_count"] = len(extracted.blocks)
+        _apply_extracted_provenance(document, extracted)
         stage = "normalize"
+        await _update_progress(
+            sessions,
+            document_id,
+            stage=stage,
+            progress=25,
+            parser_version=parser_version,
+            source_uri=document.source_uri,
+            source_metadata=document.source_metadata,
+        )
         stage_started = perf_counter()
         normalized = await asyncio.to_thread(normalize_document, extracted)
         observation["normalization_duration_ms"] = _duration_ms(stage_started)
@@ -143,6 +164,14 @@ async def run_ingestion(
         observation["ocr_fallback_page_count"] = warning_page_count(
             normalized.warnings, "ocr_fallback_used"
         )
+        serialized_warnings = [asdict(warning) for warning in normalized.warnings[:100]]
+        await _update_progress(
+            sessions,
+            document_id,
+            stage="construct",
+            progress=40,
+            warnings=serialized_warnings,
+        )
         for warning in normalized.warnings:
             logger.warning(
                 "Document extraction warning for %s: code=%s page=%s",
@@ -151,6 +180,7 @@ async def run_ingestion(
                 warning.page_number,
             )
         tokenizer = create_tokenizer(settings.chunk_tokenizer)
+        provenance = chunk_provenance(document)
 
         if chunking_version == "hierarchical_v1":
             stage = "construct"
@@ -166,6 +196,7 @@ async def run_ingestion(
                 stage_started
             )
             stage = "validate"
+            await _update_progress(sessions, document_id, stage=stage, progress=55)
             stage_started = perf_counter()
             await asyncio.to_thread(
                 validate_hierarchy,
@@ -180,6 +211,7 @@ async def run_ingestion(
             summaries = []
             if settings.summary_generation_enabled:
                 stage = "summarize"
+                await _update_progress(sessions, document_id, stage=stage, progress=60)
                 try:
                     summaries = await generate_hierarchical_summaries(
                         hierarchy.parents,
@@ -206,6 +238,7 @@ async def run_ingestion(
                     )
                     summaries = []
             stage = "embed"
+            await _update_progress(sessions, document_id, stage=stage, progress=70)
             vectors = await embed_texts(
                 [child.embedding_text or child.text for child in hierarchy.children],
                 settings=settings,
@@ -216,6 +249,7 @@ async def run_ingestion(
                 hierarchy=hierarchy,
                 vectors=vectors,
                 embedding_model=settings.embedding_model_id,
+                provenance=provenance,
             )
             if summaries:
                 try:
@@ -232,6 +266,7 @@ async def run_ingestion(
                             summaries=summaries,
                             vectors=summary_vectors,
                             embedding_model=settings.embedding_model_id,
+                            provenance=provenance,
                         ),
                     )
                 except (EmbeddingProviderError, IngestionError) as error:
@@ -259,6 +294,7 @@ async def run_ingestion(
                     "The extracted text exceeds the safe Ingestion limit for one Document"
                 )
             stage = "validate"
+            await _update_progress(sessions, document_id, stage=stage, progress=55)
             stage_started = perf_counter()
             await asyncio.to_thread(
                 validate_document_limits,
@@ -268,6 +304,7 @@ async def run_ingestion(
             )
             observation["validation_duration_ms"] = _duration_ms(stage_started)
             stage = "embed"
+            await _update_progress(sessions, document_id, stage=stage, progress=70)
             vectors = await embed_texts(
                 [chunk.text for chunk in chunks],
                 settings=settings,
@@ -279,6 +316,7 @@ async def run_ingestion(
                 vectors=vectors,
                 embedding_model=settings.embedding_model_id,
                 tokenizer=tokenizer,
+                provenance=provenance,
             )
 
         child_token_counts = [
@@ -305,6 +343,7 @@ async def run_ingestion(
             }
         )
         stage = "persist"
+        await _update_progress(sessions, document_id, stage=stage, progress=90)
         stage_started = perf_counter()
         async with sessions() as session:
             document = await session.scalar(
@@ -320,6 +359,13 @@ async def run_ingestion(
             document.page_count = normalized.page_count
             document.status = DocumentStatus.READY
             document.safe_error = None
+            document.parser_version = normalized.parser_version or parser_version
+            document.chunking_version = chunking_version
+            document.source_kind = normalized.source_kind or document.source_kind
+            document.language = normalized.language or document.language
+            document.ingestion_stage = "ready"
+            document.ingestion_progress = 100
+            document.ingestion_warnings = serialized_warnings
             await session.commit()
             observation["persistence_duration_ms"] = _duration_ms(stage_started)
             outcome = "completed"
@@ -397,7 +443,56 @@ async def _mark_failed(
             return
         document.status = DocumentStatus.FAILED
         document.safe_error = safe_error[:2_000]
+        document.ingestion_stage = "failed"
         await session.commit()
+
+
+async def _update_progress(
+    sessions: async_sessionmaker,
+    document_id: uuid.UUID,
+    *,
+    stage: str,
+    progress: int,
+    parser_version: str | None = None,
+    source_uri: str | None = None,
+    source_metadata: dict[str, object] | None = None,
+    warnings: list[dict[str, object]] | None = None,
+) -> None:
+    values: dict[str, object] = {
+        "ingestion_stage": stage,
+        "ingestion_progress": progress,
+        "updated_at": func.now(),
+    }
+    if parser_version is not None:
+        values["parser_version"] = parser_version
+    if source_uri is not None:
+        values["source_uri"] = source_uri
+    if source_metadata is not None:
+        values["source_metadata"] = source_metadata
+    if warnings is not None:
+        values["ingestion_warnings"] = warnings
+    async with sessions() as session:
+        await session.execute(
+            update(Document)
+            .where(Document.id == document_id, Document.status == DocumentStatus.PROCESSING)
+            .values(**values)
+        )
+        await session.commit()
+
+
+def _apply_extracted_provenance(document: Document, extracted: object) -> None:
+    metadata = getattr(extracted, "metadata", {})
+    if not isinstance(metadata, dict):
+        return
+    source_metadata = dict(document.source_metadata or {})
+    for key in ("module", "title"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value:
+            source_metadata[key] = value
+    canonical_uri = metadata.get("canonical_uri")
+    if document.source_uri is None and isinstance(canonical_uri, str) and canonical_uri:
+        document.source_uri = canonical_uri
+    document.source_metadata = source_metadata
 
 
 async def run_purge(document_id: uuid.UUID) -> None:

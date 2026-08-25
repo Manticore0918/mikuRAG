@@ -43,6 +43,35 @@ def test_public_locator_emits_cross_page_range_heading_and_no_parent_ids() -> No
     }
 
 
+def test_public_locator_keeps_html_and_code_source_coordinates() -> None:
+    locator = public_locator(
+        {
+            "source_kind": "code",
+            "source_path": "src/worker.py",
+            "path": "src/worker.py",
+            "language": "python",
+            "module": "src.worker",
+            "symbol": "restore",
+            "line_start": 10,
+            "line_end": 14,
+            "element": "html > body > #content > p:nth-of-type(1)",
+            "text_start": 120,
+            "text_end": 180,
+            "source_uri": "https://docs.example.test/worker",
+            "source_title": "Worker runbook",
+            "source_parent_id": str(uuid.uuid4()),
+        }
+    )
+
+    assert locator["path"] == "src/worker.py"
+    assert locator["line_start"] == 10
+    assert locator["line_end"] == 14
+    assert locator["symbol"] == "restore"
+    assert locator["element"].endswith("p:nth-of-type(1)")
+    assert locator["source_uri"] == "https://docs.example.test/worker"
+    assert "source_parent_id" not in locator
+
+
 def test_evidence_shape_is_unchanged_while_locator_is_enriched() -> None:
     chunk_id = uuid.uuid4()
     candidate = Candidate(

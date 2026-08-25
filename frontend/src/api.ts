@@ -27,6 +27,22 @@ export type DocumentRecord = {
   page_count: number | null
   status: 'pending' | 'processing' | 'ready' | 'failed' | 'deleting'
   safe_error: string | null
+  parser_version: string | null
+  chunking_version: string | null
+  source_kind: 'pdf' | 'docx' | 'text' | 'markdown' | 'html' | 'code'
+  language: string | null
+  tags: string[]
+  source_uri: string | null
+  source_path: string | null
+  source_metadata: Record<string, unknown>
+  ingestion_stage: string
+  ingestion_progress: number
+  ingestion_attempts: number
+  ingestion_warnings: Array<{
+    code: string
+    message: string
+    page_number?: number | null
+  }>
   created_at: string
   updated_at: string
 }
@@ -37,6 +53,12 @@ export type UploadSession = {
   initiated_by_id: string | null
   initiated_by_username: string | null
   original_name: string
+  source_kind: 'pdf' | 'docx' | 'text' | 'markdown' | 'html' | 'code'
+  language: string | null
+  tags: string[]
+  source_uri: string | null
+  source_path: string | null
+  source_metadata: Record<string, unknown>
   declared_sha256: string
   total_bytes: number
   received_bytes: number

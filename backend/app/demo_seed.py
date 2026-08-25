@@ -14,7 +14,11 @@ from sqlalchemy import func, select
 from app.config import get_settings
 from app.database import close_database, session_factory
 from app.ingestion.dispatch import enqueue_ingestion
-from app.ingestion.storage import storage_path
+from app.ingestion.storage import (
+    language_for_suffix,
+    source_kind_for_suffix,
+    storage_path,
+)
 from app.models import (
     Document,
     DocumentStatus,
@@ -24,13 +28,16 @@ from app.models import (
 )
 from app.security import hash_password
 
-DATASET_VERSION = "baseline_demo_v1"
+DATASET_VERSION = "checkpoint1_demo_v1"
 PUBLIC_KNOWLEDGE_BASE = "mikuRAG Baseline Demo"
 RESTRICTED_KNOWLEDGE_BASE = "mikuRAG Baseline Restricted"
 DATA_DIR = Path(__file__).with_name("demo_data") / "v1"
 ASSETS = (
     ("operations-handbook.pdf", "application/pdf"),
     ("release-guide.md", "text/markdown"),
+    ("recovery-runbook.html", "text/html"),
+    ("recovery_worker.py", "text/x-python"),
+    ("recovery-client.ts", "text/typescript"),
 )
 
 
@@ -45,8 +52,7 @@ class SeedResult:
     queued_document_ids: list[str]
 
 
-def _required_password(variable: str) -> str:
-    value = os.getenv(variable, "")
+def _required_password(value: str, variable: str) -> str:
     if len(value) < 12:
         raise SystemExit(f"{variable} must contain at least 12 characters")
     return value
@@ -56,14 +62,20 @@ async def _ensure_users(
     *,
     administrator_username: str,
     administrator_password: str,
+    administrator_password_variable: str,
     demo_username: str,
     demo_password: str,
+    demo_password_variable: str,
 ) -> tuple[User, User]:
     async with session_factory() as session:
         administrator = await session.scalar(
             select(User).where(User.is_administrator.is_(True)).order_by(User.created_at)
         )
         if administrator is None:
+            administrator_password = _required_password(
+                administrator_password,
+                administrator_password_variable,
+            )
             existing = await session.scalar(
                 select(User).where(
                     func.lower(User.username) == administrator_username.lower()
@@ -85,6 +97,10 @@ async def _ensure_users(
             select(User).where(func.lower(User.username) == demo_username.lower())
         )
         if demo_user is None:
+            demo_password = _required_password(
+                demo_password,
+                demo_password_variable,
+            )
             demo_user = User(
                 username=demo_username.lower(),
                 password_hash=hash_password(demo_password),
@@ -108,6 +124,10 @@ async def _ensure_knowledge_base(name: str, description: str) -> KnowledgeBase:
         if knowledge_base is None:
             knowledge_base = KnowledgeBase(name=name, description=description)
             session.add(knowledge_base)
+            await session.commit()
+            await session.refresh(knowledge_base)
+        elif knowledge_base.description != description:
+            knowledge_base.description = description
             await session.commit()
             await session.refresh(knowledge_base)
         return knowledge_base
@@ -140,6 +160,9 @@ async def _ensure_document(
     content = source.read_bytes()
     digest = hashlib.sha256(content).hexdigest()
     storage_key = f"demo/{DATASET_VERSION}/{filename}"
+    suffix = Path(filename).suffix.casefold()
+    source_kind = source_kind_for_suffix(suffix)
+    language = language_for_suffix(suffix)
     async with session_factory() as session:
         document = await session.scalar(
             select(Document).where(
@@ -148,6 +171,31 @@ async def _ensure_document(
             )
         )
         if document is not None:
+            document.source_kind = source_kind
+            document.language = language
+            document.tags = ["baseline-demo", source_kind]
+            document.source_path = (
+                f"demo/{filename}" if source_kind == "code" else None
+            )
+            document.source_metadata = {
+                **dict(document.source_metadata or {}),
+                "dataset_version": DATASET_VERSION,
+            }
+            needs_provenance_refresh = (
+                document.status == DocumentStatus.READY
+                and (
+                    document.parser_version is None
+                    or document.chunking_version is None
+                )
+            )
+            if needs_provenance_refresh:
+                document.status = DocumentStatus.PENDING
+                document.safe_error = None
+                document.ingestion_stage = "queued"
+                document.ingestion_progress = 0
+                document.ingestion_warnings = []
+            await session.commit()
+            await session.refresh(document)
             return document, document.status in {
                 DocumentStatus.PENDING,
                 DocumentStatus.FAILED,
@@ -171,6 +219,15 @@ async def _ensure_document(
             media_type=media_type,
             size_bytes=len(content),
             status=DocumentStatus.PENDING,
+            source_kind=source_kind,
+            language=language,
+            tags=["baseline-demo", source_kind],
+            source_path=f"demo/{filename}" if source_kind == "code" else None,
+            source_metadata={"dataset_version": DATASET_VERSION},
+            ingestion_stage="queued",
+            ingestion_progress=0,
+            ingestion_attempts=0,
+            ingestion_warnings=[],
         )
         session.add(document)
         await session.commit()
@@ -214,13 +271,15 @@ async def _wait_for_documents(
 async def seed(args: argparse.Namespace) -> SeedResult:
     administrator, demo_user = await _ensure_users(
         administrator_username=args.administrator_username,
-        administrator_password=_required_password(args.administrator_password_env),
+        administrator_password=os.getenv(args.administrator_password_env, ""),
+        administrator_password_variable=args.administrator_password_env,
         demo_username=args.demo_username,
-        demo_password=_required_password(args.demo_password_env),
+        demo_password=os.getenv(args.demo_password_env, ""),
+        demo_password_variable=args.demo_password_env,
     )
     public = await _ensure_knowledge_base(
         PUBLIC_KNOWLEDGE_BASE,
-        "Deterministic PDF and Markdown corpus for the reproducible baseline demo.",
+        "Deterministic PDF, HTML, Markdown, Python, and TypeScript provenance demo.",
     )
     restricted = await _ensure_knowledge_base(
         RESTRICTED_KNOWLEDGE_BASE,
@@ -261,7 +320,7 @@ async def seed(args: argparse.Namespace) -> SeedResult:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Seed the reproducible checkpoint-0 demo"
+        description="Seed the reproducible checkpoint-1 multi-source demo"
     )
     parser.add_argument("--administrator-username", default="admin")
     parser.add_argument("--demo-username", default="baseline-demo")

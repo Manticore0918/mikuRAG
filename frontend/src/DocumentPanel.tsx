@@ -22,7 +22,7 @@ type LocalTransfer = {
 }
 
 const activeStatuses = new Set<DocumentRecord['status']>(['pending', 'processing', 'deleting'])
-const acceptedTypes = '.pdf,.docx,.txt,.md,.markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown'
+const acceptedTypes = '.pdf,.docx,.txt,.md,.markdown,.htm,.html,.py,.js,.jsx,.mjs,.cjs,.ts,.tsx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/html,text/x-python,text/javascript,text/typescript'
 
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
@@ -38,6 +38,10 @@ export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Pro
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [uploadSessions, setUploadSessions] = useState<UploadSession[]>([])
   const [file, setFile] = useState<File | null>(null)
+  const [sourceUri, setSourceUri] = useState('')
+  const [sourcePath, setSourcePath] = useState('')
+  const [language, setLanguage] = useState('')
+  const [tags, setTags] = useState('')
   const [localTransfer, setLocalTransfer] = useState<LocalTransfer | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -125,6 +129,10 @@ export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Pro
       )
       setLocalTransfer(null)
       setFile(null)
+      setSourceUri('')
+      setSourcePath('')
+      setLanguage('')
+      setTags('')
       formRef.current?.reset()
       onNotice('Document uploaded and queued for Ingestion')
       await load(knowledgeBaseId)
@@ -160,7 +168,15 @@ export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Pro
         : await mutate<UploadSession>(
           `/admin/knowledge-bases/${knowledgeBaseId}/document-uploads`,
           'POST',
-          { original_name: selectedFile.name, size_bytes: selectedFile.size, sha256: digest },
+          {
+            original_name: selectedFile.name,
+            size_bytes: selectedFile.size,
+            sha256: digest,
+            ...(sourceUri.trim() ? { source_uri: sourceUri.trim() } : {}),
+            ...(sourcePath.trim() ? { source_path: sourcePath.trim() } : {}),
+            ...(language.trim() ? { language: language.trim() } : {}),
+            tags: tags.split(',').map((tag) => tag.trim()).filter(Boolean),
+          },
         )
       setUploadSessions((current) => [session, ...current.filter((item) => item.id !== session.id)])
       await runTransfer(session, selectedFile)
@@ -252,7 +268,7 @@ export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Pro
       <form ref={formRef} className="card document-upload" onSubmit={uploadDocument}>
         <div>
           <strong>Add a Document</strong>
-          <p>PDF, DOCX, TXT, or Markdown · 50 MB maximum · resumable upload</p>
+          <p>PDF, DOCX, TXT, Markdown, HTML, Python, TypeScript, or JavaScript · 50 MB maximum · resumable upload</p>
           <p className="privacy-boundary">Extracted text leaves this Installation for embedding with Alibaba Model Studio.</p>
         </div>
         <input
@@ -263,6 +279,12 @@ export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Pro
           onChange={(event) => setFile(event.target.files?.[0] || null)}
           required
         />
+        <div className="source-metadata-grid">
+          <label>Source URL <input type="url" placeholder="https://docs.example.com/guide" value={sourceUri} onChange={(event) => setSourceUri(event.target.value)} /></label>
+          <label>Repository path <input placeholder="src/services/worker.py" value={sourcePath} onChange={(event) => setSourcePath(event.target.value)} /></label>
+          <label>Language <input placeholder="Optional for text sources" value={language} onChange={(event) => setLanguage(event.target.value)} /></label>
+          <label>Tags <input placeholder="operations, runbook" value={tags} onChange={(event) => setTags(event.target.value)} /></label>
+        </div>
         <button className="primary" disabled={!file || !knowledgeBaseId || browserBusy}>
           {localTransfer?.phase === 'hashing' ? 'Verifying…' : browserBusy ? 'Uploading…' : 'Upload and ingest'}
         </button>
@@ -295,10 +317,10 @@ export default function DocumentPanel({ knowledgeBases, onError, onNotice }: Pro
 
       {!knowledgeBases.length && <div className="empty-state">Create a Knowledge Base before uploading Documents.</div>}
       {!!knowledgeBases.length && !documents.length && <div className="empty-state">No Documents in this Knowledge Base yet.</div>}
-      {!!documents.length && <div className="table-wrap card"><table className="document-table"><thead><tr><th>Document</th><th>Status</th><th>Size</th><th>Pages</th><th>Actions</th></tr></thead><tbody>
+      {!!documents.length && <div className="table-wrap card"><table className="document-table"><thead><tr><th>Document</th><th>Ingestion</th><th>Size</th><th>Pages</th><th>Actions</th></tr></thead><tbody>
         {documents.map((document) => <tr key={document.id}>
-          <td><strong>{document.original_name}</strong><small>Added {new Date(document.created_at).toLocaleString()}</small>{document.safe_error && <span className="document-error">{document.safe_error}</span>}</td>
-          <td><span className={`status-badge status-${document.status}`}>{document.status}</span></td>
+          <td><strong>{document.original_name}</strong><small>{document.source_kind}{document.language ? ` · ${document.language}` : ''}{document.source_path ? ` · ${document.source_path}` : ''}</small>{document.tags.length > 0 && <small>Tags: {document.tags.join(', ')}</small>}{document.source_uri && <small><a href={document.source_uri} target="_blank" rel="noreferrer">Original source</a></small>}<small>Added {new Date(document.created_at).toLocaleString()}</small>{document.safe_error && <span className="document-error">{document.safe_error}</span>}</td>
+          <td><span className={`status-badge status-${document.status}`}>{document.status}</span><small>{document.ingestion_stage} · {document.ingestion_progress}% · attempt {document.ingestion_attempts}</small><small>parser {document.parser_version || 'pending'} · chunker {document.chunking_version || 'pending'}</small>{document.ingestion_warnings.map((warning, index) => <span className="document-warning" key={`${warning.code}-${index}`}>{warning.message}{warning.page_number ? ` (page ${warning.page_number})` : ''}</span>)}</td>
           <td>{formatBytes(document.size_bytes)}</td>
           <td>{document.page_count ?? '—'}</td>
           <td><div className="document-actions">{document.status === 'failed' && <button onClick={() => void retryDocument(document)}>Retry</button>}<button className="danger-link" disabled={document.status === 'deleting'} onClick={() => void deleteDocument(document)}>{document.status === 'deleting' ? 'Deleting…' : 'Delete'}</button></div></td>

@@ -1,5 +1,5 @@
 {
-  "dataset_version": "baseline_demo_v1",
+  "dataset_version": "checkpoint1_demo_v1",
   "knowledge_base": "mikuRAG Baseline Demo",
   "restricted_knowledge_base": "mikuRAG Baseline Restricted",
   "cases": [
@@ -38,6 +38,30 @@
       "expected_facts": ["Document text", "query text", "evidence text"],
       "expected_source": "operations-handbook.pdf",
       "expected_locator": {"page": 2}
+    },
+    {
+      "id": "html_element_locator",
+      "category": "html_provenance",
+      "turns": ["When should validation code HTML-8830 be used?"],
+      "expected_facts": ["after the standby database accepts writes"],
+      "expected_source": "recovery-runbook.html",
+      "expected_locator": {"line_start": 13}
+    },
+    {
+      "id": "python_symbol_locator",
+      "category": "code_provenance",
+      "turns": ["What audit code does restore_checkpoint return?"],
+      "expected_facts": ["PY-2048"],
+      "expected_source": "recovery_worker.py",
+      "expected_locator": {"symbol": "restore_checkpoint", "line_start": 3}
+    },
+    {
+      "id": "typescript_symbol_locator",
+      "category": "code_provenance",
+      "turns": ["What is the recovery client code constant?"],
+      "expected_facts": ["TS-7319"],
+      "expected_source": "recovery-client.ts",
+      "expected_locator": {"symbol": "RECOVERY_CLIENT_CODE", "line_start": 1}
     },
     {
       "id": "insufficient_evidence",

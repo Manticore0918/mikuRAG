@@ -1,8 +1,12 @@
 import uuid
 from datetime import datetime
+from pathlib import PurePosixPath
+from typing import Any
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.ingestion.provenance import validate_source_metadata, validate_tags
 from app.rag.citations import LocatorValue
 
 
@@ -90,6 +94,18 @@ class DocumentRead(BaseModel):
     page_count: int | None
     status: str
     safe_error: str | None
+    parser_version: str | None
+    chunking_version: str | None
+    source_kind: str
+    language: str | None
+    tags: list[str]
+    source_uri: str | None
+    source_path: str | None
+    source_metadata: dict[str, Any]
+    ingestion_stage: str
+    ingestion_progress: int
+    ingestion_attempts: int
+    ingestion_warnings: list[dict[str, Any]]
     created_at: datetime
     updated_at: datetime
 
@@ -144,6 +160,11 @@ class UploadSessionCreate(BaseModel):
     original_name: str = Field(min_length=1, max_length=255)
     size_bytes: int = Field(gt=0)
     sha256: str = Field(pattern=r"^[A-Fa-f0-9]{64}$")
+    language: str | None = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9+.#_-]+$")
+    tags: list[str] = Field(default_factory=list)
+    source_uri: str | None = Field(default=None, max_length=2_048)
+    source_path: str | None = Field(default=None, max_length=1_024)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("original_name")
     @classmethod
@@ -155,6 +176,49 @@ class UploadSessionCreate(BaseModel):
     def normalize_sha256(cls, value: str) -> str:
         return value.lower()
 
+    @field_validator("language", mode="before")
+    @classmethod
+    def clean_language(cls, value: str | None) -> str | None:
+        return value.strip().casefold() if value is not None else None
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def clean_tags(cls, value: object) -> list[str]:
+        return validate_tags(value)
+
+    @field_validator("source_uri")
+    @classmethod
+    def clean_source_uri(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        parsed = urlparse(cleaned)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("source_uri must be an absolute HTTP or HTTPS URL")
+        return cleaned
+
+    @field_validator("source_path")
+    @classmethod
+    def clean_source_path(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip().replace("\\", "/")
+        path = PurePosixPath(cleaned)
+        if (
+            not cleaned
+            or path.is_absolute()
+            or ".." in path.parts
+            or (path.parts and path.parts[0].endswith(":"))
+            or any(not character.isprintable() for character in cleaned)
+        ):
+            raise ValueError("source_path must be a safe repository-relative path")
+        return str(path)
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def clean_metadata(cls, value: object) -> dict[str, Any]:
+        return validate_source_metadata(value)
+
 
 class UploadSessionRead(BaseModel):
     id: uuid.UUID
@@ -162,6 +226,12 @@ class UploadSessionRead(BaseModel):
     initiated_by_id: uuid.UUID | None
     initiated_by_username: str | None
     original_name: str
+    source_kind: str
+    language: str | None
+    tags: list[str]
+    source_uri: str | None
+    source_path: str | None
+    source_metadata: dict[str, Any]
     declared_sha256: str
     total_bytes: int
     received_bytes: int

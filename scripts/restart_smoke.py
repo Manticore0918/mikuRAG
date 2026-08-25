@@ -76,6 +76,30 @@ def _require(response: httpx.Response) -> httpx.Response:
     return response
 
 
+def _wait_for_document_status(
+    client: httpx.Client,
+    knowledge_base_id: str,
+    document_id: str,
+    terminal_status: str,
+    *,
+    timeout_seconds: int = 180,
+) -> dict[str, object]:
+    deadline = time.monotonic() + timeout_seconds
+    latest: dict[str, object] | None = None
+    while time.monotonic() < deadline:
+        documents = _require(
+            client.get(f"/admin/knowledge-bases/{knowledge_base_id}/documents")
+        ).json()
+        latest = next((row for row in documents if row["id"] == document_id), None)
+        if latest is not None and latest["status"] == terminal_status:
+            return latest
+        time.sleep(2)
+    status = latest["status"] if latest is not None else "missing"
+    raise RuntimeError(
+        f"Document {document_id} did not become {terminal_status}; status={status}"
+    )
+
+
 def main() -> None:
     if not (ROOT / ".env").exists():
         raise SystemExit("Copy .env.example to .env and replace its placeholders first")
@@ -136,6 +160,8 @@ def main() -> None:
     headers = {"X-CSRF-Token": csrf_token}
     upload_id: str | None = None
     document_id: str | None = None
+    failure_upload_id: str | None = None
+    failure_document_id: str | None = None
     worker_stopped = False
 
     with httpx.Client(base_url=BASE_URL, timeout=30) as client:
@@ -210,29 +236,103 @@ def main() -> None:
             _run(["docker", "compose", "restart", "worker"])
             worker_stopped = False
 
-            deadline = time.monotonic() + 180
-            final_status = "pending"
-            while time.monotonic() < deadline:
-                documents = _require(
-                    client.get(f"/admin/knowledge-bases/{knowledge_base}/documents")
-                ).json()
-                matching = [row for row in documents if row["id"] == document_id]
-                if matching:
-                    final_status = matching[0]["status"]
-                    if final_status in {"ready", "failed"}:
-                        break
-                time.sleep(2)
-            if final_status != "ready":
-                raise RuntimeError(
-                    f"Ingestion did not recover after worker restart; status={final_status}"
+            recovered = _wait_for_document_status(
+                client,
+                knowledge_base,
+                document_id,
+                "ready",
+            )
+
+            malformed = b"def broken(:\n    pass\n"
+            malformed_checksum = hashlib.sha256(malformed).hexdigest()
+            failed_upload = _require(
+                client.post(
+                    f"/admin/knowledge-bases/{knowledge_base}/document-uploads",
+                    headers=headers,
+                    json={
+                        "original_name": f"checkpoint-malformed-{run_id}.py",
+                        "size_bytes": len(malformed),
+                        "sha256": malformed_checksum,
+                        "source_kind": "code",
+                        "language": "python",
+                        "source_path": f"smoke/checkpoint-malformed-{run_id}.py",
+                        "tags": ["checkpoint-1-smoke"],
+                    },
                 )
+            ).json()
+            failure_upload_id = failed_upload["id"]
+            _require(
+                client.put(
+                    f"/admin/knowledge-bases/{knowledge_base}/document-uploads/"
+                    f"{failure_upload_id}/parts",
+                    headers={
+                        **headers,
+                        "Content-Type": "application/octet-stream",
+                        "X-Upload-Offset": "0",
+                        "X-Upload-Length": str(len(malformed)),
+                        "X-Upload-SHA256": malformed_checksum,
+                    },
+                    content=malformed,
+                )
+            )
+            failed_document = _require(
+                client.post(
+                    f"/admin/knowledge-bases/{knowledge_base}/document-uploads/"
+                    f"{failure_upload_id}/complete",
+                    headers=headers,
+                )
+            ).json()
+            failure_document_id = failed_document["id"]
+            first_failure = _wait_for_document_status(
+                client,
+                knowledge_base,
+                failure_document_id,
+                "failed",
+            )
+            if first_failure.get("ingestion_stage") != "failed":
+                raise RuntimeError("Malformed parser result did not expose failed stage")
+            if not str(first_failure.get("safe_error") or "").startswith("extract:"):
+                raise RuntimeError("Malformed parser result did not expose a safe extract error")
+            first_attempts = int(first_failure.get("ingestion_attempts") or 0)
+            if first_attempts < 1:
+                raise RuntimeError("Malformed parser result did not record an attempt")
+            chunk_count = int(
+                _psql(
+                    postgres_user,
+                    postgres_database,
+                    "SELECT count(*) FROM chunks "
+                    f"WHERE document_id = '{failure_document_id}'",
+                )
+            )
+            if chunk_count != 0:
+                raise RuntimeError("Malformed source exposed partial retrieval chunks")
+            retried = _require(
+                client.post(
+                    f"/admin/knowledge-bases/{knowledge_base}/documents/"
+                    f"{failure_document_id}/retry",
+                    headers=headers,
+                )
+            ).json()
+            if retried["status"] != "pending" or retried["ingestion_stage"] != "queued":
+                raise RuntimeError("Parser retry did not return to the durable queue state")
+            second_failure = _wait_for_document_status(
+                client,
+                knowledge_base,
+                failure_document_id,
+                "failed",
+            )
+            if int(second_failure.get("ingestion_attempts") or 0) <= first_attempts:
+                raise RuntimeError("Parser retry did not increment the attempt count")
 
             print(
                 json.dumps(
                     {
                         "backend_restart_open_upload": "pass",
                         "ingestion_after_worker_restart": "pass",
-                        "document_status": final_status,
+                        "document_status": recovered["status"],
+                        "failed_parser_consistency": "pass",
+                        "failed_parser_retry": "pass",
+                        "partial_chunks_after_failure": chunk_count,
                     },
                     indent=2,
                 )
@@ -261,6 +361,15 @@ def main() -> None:
                     )
                 except httpx.HTTPError:
                     pass
+            if failure_document_id is not None:
+                try:
+                    client.delete(
+                        f"/admin/knowledge-bases/{knowledge_base}/documents/"
+                        f"{failure_document_id}",
+                        headers=headers,
+                    )
+                except httpx.HTTPError:
+                    pass
             if upload_id is not None:
                 subprocess.run(
                     [
@@ -276,6 +385,28 @@ def main() -> None:
                         postgres_database,
                         "-c",
                         f"DELETE FROM upload_sessions WHERE id = '{upload_id}'",
+                    ],
+                    cwd=ROOT,
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            if failure_upload_id is not None:
+                subprocess.run(
+                    [
+                        "docker",
+                        "compose",
+                        "exec",
+                        "-T",
+                        "postgres",
+                        "psql",
+                        "-U",
+                        postgres_user,
+                        "-d",
+                        postgres_database,
+                        "-c",
+                        "DELETE FROM upload_sessions "
+                        f"WHERE id = '{failure_upload_id}'",
                     ],
                     cwd=ROOT,
                     check=False,

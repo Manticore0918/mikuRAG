@@ -19,8 +19,11 @@ from app.ingestion.dispatch import enqueue_ingestion
 from app.ingestion.errors import UploadValidationError
 from app.ingestion.storage import (
     ALLOWED_SUFFIXES,
+    language_for_suffix,
     safe_original_name,
+    source_kind_for_suffix,
     storage_path,
+    supported_formats_message,
     validate_file_format,
 )
 from app.models import (
@@ -68,6 +71,12 @@ def _read_upload(upload: UploadSession, username: str | None) -> UploadSessionRe
         initiated_by_id=upload.initiated_by_id,
         initiated_by_username=username,
         original_name=upload.original_name,
+        source_kind=upload.source_kind or source_kind_for_suffix(upload.suffix),
+        language=upload.language,
+        tags=list(upload.tags or []),
+        source_uri=upload.source_uri,
+        source_path=upload.source_path,
+        source_metadata=dict(upload.source_metadata or {}),
         declared_sha256=upload.declared_sha256,
         total_bytes=upload.total_bytes,
         received_bytes=upload.received_bytes,
@@ -205,7 +214,7 @@ async def create_upload_session(
     if suffix not in ALLOWED_SUFFIXES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Supported formats are PDF, DOCX, TXT, and Markdown",
+            detail=supported_formats_message(),
         )
     if payload.size_bytes > settings.max_upload_bytes:
         raise HTTPException(
@@ -238,6 +247,19 @@ async def create_upload_session(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="The selected file does not match the existing Upload Session",
             )
+        if (
+            existing.language != (language_for_suffix(suffix) or payload.language)
+            or existing.tags != payload.tags
+            or existing.source_uri != payload.source_uri
+            or existing.source_path != _source_path(payload, suffix)
+            or existing.source_metadata != payload.metadata
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "This file already has an open Upload Session with different source metadata"
+                ),
+            )
         existing.expires_at = _expiry(settings)
         await session.commit()
         await session.refresh(existing)
@@ -269,6 +291,12 @@ async def create_upload_session(
         initiated_by_id=administrator.id,
         original_name=safe_original_name(payload.original_name, suffix),
         suffix=suffix,
+        source_kind=source_kind_for_suffix(suffix),
+        language=language_for_suffix(suffix) or payload.language,
+        tags=payload.tags,
+        source_uri=payload.source_uri,
+        source_path=_source_path(payload, suffix),
+        source_metadata=payload.metadata,
         declared_sha256=payload.sha256,
         total_bytes=payload.size_bytes,
         received_bytes=0,
@@ -508,6 +536,16 @@ async def complete_upload_session(
         media_type=media_type,
         size_bytes=upload.total_bytes,
         status=DocumentStatus.PENDING,
+        source_kind=upload.source_kind or source_kind_for_suffix(upload.suffix),
+        language=upload.language,
+        tags=list(upload.tags or []),
+        source_uri=upload.source_uri,
+        source_path=upload.source_path,
+        source_metadata=dict(upload.source_metadata or {}),
+        ingestion_stage="queued",
+        ingestion_progress=0,
+        ingestion_attempts=0,
+        ingestion_warnings=[],
     )
     session.add(document)
     upload.status = UploadSessionStatus.COMPLETED
@@ -545,10 +583,19 @@ async def complete_upload_session(
 
     if not enqueue_ingestion(document.id):
         document.status = DocumentStatus.FAILED
+        document.ingestion_stage = "failed"
         document.safe_error = "The ingestion queue is unavailable. Retry this Document later."
         await session.commit()
         await session.refresh(document)
     return document
+
+
+def _source_path(payload: UploadSessionCreate, suffix: str) -> str | None:
+    if payload.source_path:
+        return payload.source_path
+    if source_kind_for_suffix(suffix) == "code":
+        return safe_original_name(payload.original_name, suffix)
+    return None
 
 
 @router.delete(

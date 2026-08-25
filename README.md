@@ -9,10 +9,10 @@ generated summaries, rollout jobs, evaluation gates, and their observability are
 experimental and feature-off by default. They can be exercised explicitly
 without changing the stable retrieval path.
 
-The current checkpoint-0 work consolidates the existing application foundation,
-authorization boundary, asynchronous Document Ingestion, grounded chat, and the
-feature-flagged hierarchical implementation into a reproducible baseline. It is
-not described as the default until the committed acceptance report passes.
+Checkpoint 1 extends the reproducible baseline with heterogeneous, asynchronous
+Ingestion and source-specific provenance. PDF, HTML, Markdown, Python, and
+TypeScript can coexist in one Knowledge Base while the feature-flagged
+hierarchical implementation remains experimental.
 
 ## Local container startup
 
@@ -59,13 +59,33 @@ Ollama remains external to Compose. Set `MIKURAG_GENERATION_BASE_URL` to its Ope
 
 Set `MIKURAG_EMBEDDING_API_KEY` before ingesting Documents. The worker calls the configured Alibaba Model Studio endpoint with `tongyi-embedding-vision-flash-2026-03-06`; extracted chunks leave the Installation for embedding. The key is read from the API/worker environment and is never placed in a Redis task payload.
 
-Administrators can upload, inspect, retry, and delete text-extractable PDF, DOCX, TXT, and Markdown Documents. Files are limited to 50 MB and PDFs to 500 pages. Scanned or image-only files fail safely because OCR is outside this MVP.
+Administrators can upload, inspect, retry, and delete text-extractable PDF, DOCX,
+TXT, Markdown, HTML, Python, JavaScript, and TypeScript Documents. Files are
+limited to 50 MB and PDFs to 500 pages. Text source files must be valid UTF-8.
+Scanned or image-only PDFs, malformed source files, and unsafe inputs fail with a
+bounded user-facing error because OCR is outside this MVP.
 
 Uploads are split into sequential 5 MiB parts. PostgreSQL records the confirmed byte offset and the persistent upload volume retains incomplete bytes, so a transfer can resume after network loss, page reload, or API restart. The Administrator reselects the same file after a reload; mikuRAG verifies its SHA-256 before continuing. Open Upload Sessions expire after 24 hours without activity, and the scheduled `beat` service removes expired or orphaned temporary data hourly.
 
 A source becomes a Document only after all bytes arrive and the server independently verifies its total size, SHA-256, and format. At most 20 Upload Sessions can remain open across the Installation, while the existing 50 MB and 500-page limits remain unchanged.
 
 PostgreSQL is authoritative for `pending`, `processing`, `ready`, `failed`, and `deleting` states. Chunks and vectors are committed only when a Document becomes `ready`. Deletion changes the state to `deleting` before background removal, allowing retrieval to exclude it immediately.
+
+The Administrator view exposes the durable Ingestion stage, percentage,
+attempts, parser/chunker versions, and safe warnings. Document provenance stores
+source kind, language, tags, URI or repository-relative path, and validated JSON
+metadata. Only a small retrieval-relevant allowlist is copied to chunk locators;
+secret-like metadata keys are rejected.
+
+### Provenance and Citation proof
+
+| Source | Extracted structure | Stored locator | Rendered Citation |
+| --- | --- | --- | --- |
+| PDF | pages and layout blocks | `page`, `start_page`, `end_page` | `p. 14` or `pp. 14–15` |
+| HTML | title, heading path, content element, text offsets | `heading_path`, `element`, `line_start/end`, `text_start/end`, source URI | heading · element · lines |
+| Markdown | heading hierarchy and source lines | `heading_path`, `line_start/end` | heading · lines |
+| Python | module and AST-discovered symbols | repository-relative `path`, `symbol`, `line_start/end`, `language` | `path/to/file.py:40–55 · symbol()` |
+| TypeScript/JavaScript | top-level declarations with a line-aware fallback | repository-relative `path`, `symbol`, `line_start/end`, `language` | `src/client.ts:12–18 · symbol` |
 
 ## Grounded chat
 
@@ -103,10 +123,12 @@ npm run build
 
 ## Reproducible baseline demo
 
-The versioned demo contains a two-page PDF, a Markdown release guide, and six
-questions covering exact identifiers, paraphrase, follow-up rewriting,
-Citations, insufficient evidence, and an authorization boundary. The seed is
-idempotent and sends both Documents through the real worker.
+The versioned demo contains a two-page PDF plus Markdown, HTML, Python, and
+TypeScript sources. Nine questions cover exact identifiers, paraphrase,
+follow-up rewriting, page/heading/element/path locators, insufficient evidence,
+and an authorization boundary. The idempotent seed sends all five Documents
+through the real worker; legacy demo rows are re-ingested once to add parser and
+chunker version provenance.
 
 Set two temporary passwords in your shell, then run the seed, structural smoke,
 and restart-durability checks:
@@ -137,7 +159,7 @@ expected evidence.
 ## Documentation
 
 - Product language: [`CONTEXT.md`](./CONTEXT.md)
-- Checkpoint-0 demo and proof script: [`docs/BASELINE-DEMO.md`](./docs/BASELINE-DEMO.md)
+- Checkpoint-1 multi-source demo and proof script: [`docs/BASELINE-DEMO.md`](./docs/BASELINE-DEMO.md)
 - Approved MVP plan: [`docs/MVP-PLAN.md`](./docs/MVP-PLAN.md)
 - Hierarchical chunking rollout and rollback: [`docs/CHUNKING-CONFIG.md`](./docs/CHUNKING-CONFIG.md)
 - Hierarchical chunking observation events: [`docs/CHUNKING-OBSERVABILITY.md`](./docs/CHUNKING-OBSERVABILITY.md)

@@ -132,7 +132,7 @@ def main() -> None:
 
         _alembic(base_url, DATABASES[1], "upgrade", "0005")
         _alembic(base_url, DATABASES[1], "upgrade", "head")
-        print("Migration smoke passed: clean, 0005 upgrade, 0007 rollback, and re-upgrade")
+        print("Migration smoke passed: clean, 0005 upgrade, 0008 rollback, and re-upgrade")
     finally:
         for database in DATABASES:
             subprocess.run(

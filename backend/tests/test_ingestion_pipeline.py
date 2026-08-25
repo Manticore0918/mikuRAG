@@ -227,4 +227,5 @@ async def test_mark_failed_preserves_previous_chunks() -> None:
 
     assert document.status == DocumentStatus.FAILED
     assert document.safe_error == "embed: provider unavailable"
+    assert document.ingestion_stage == "failed"
     assert _stage_error("validate", "bad hierarchy") == "validate: bad hierarchy"

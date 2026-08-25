@@ -31,6 +31,33 @@ test('formats compatible page locators and hides internal hierarchy metadata', (
   expect(formatCitationLocator({ section: 'Access' })).toBe('section: Access')
 })
 
+test('formats HTML, Markdown, and code locators with source-specific labels', () => {
+  expect(formatCitationLocator({
+    source_kind: 'html',
+    heading_path: ['Guide', 'Recovery'],
+    element: '#content > p:nth-of-type(1)',
+    line_start: 18,
+    line_end: 20,
+  })).toBe('Guide › Recovery · lines 18-20 · #content > p:nth-of-type(1)')
+
+  expect(formatCitationLocator({
+    source_kind: 'code',
+    source_path: 'src/jobs/worker.py',
+    path: 'src/jobs/worker.py',
+    line_start: 41,
+    line_end: 44,
+    symbol: 'restore',
+    language: 'python',
+  })).toBe('src/jobs/worker.py:41-44 · symbol restore')
+
+  expect(formatCitationLocator({
+    source_kind: 'markdown',
+    heading_path: ['Setup'],
+    line_start: 7,
+    line_end: 7,
+  })).toBe('Setup · line 7')
+})
+
 test('shows validated Citations with expandable evidence and source access', async () => {
   const conversation = {
     id: 'conversation-1',

@@ -43,6 +43,15 @@ class DocumentStatus(enum.StrEnum):
     DELETING = "deleting"
 
 
+class SourceKind(enum.StrEnum):
+    PDF = "pdf"
+    DOCX = "docx"
+    TEXT = "text"
+    MARKDOWN = "markdown"
+    HTML = "html"
+    CODE = "code"
+
+
 class UploadSessionStatus(enum.StrEnum):
     OPEN = "open"
     COMPLETED = "completed"
@@ -153,10 +162,54 @@ class Document(TimestampMixin, Base):
     page_count: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=DocumentStatus.PENDING)
     safe_error: Mapped[str | None] = mapped_column(Text)
+    parser_version: Mapped[str | None] = mapped_column(String(64))
+    chunking_version: Mapped[str | None] = mapped_column(String(64))
+    source_kind: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=SourceKind.TEXT, server_default=SourceKind.TEXT
+    )
+    language: Mapped[str | None] = mapped_column(String(64))
+    tags: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    source_uri: Mapped[str | None] = mapped_column(String(2_048))
+    source_path: Mapped[str | None] = mapped_column(String(1_024))
+    source_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    ingestion_stage: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="queued", server_default="queued"
+    )
+    ingestion_progress: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    ingestion_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    ingestion_warnings: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
 
     __table_args__ = (
         UniqueConstraint("knowledge_base_id", "sha256", name="documents_kb_sha256_uq"),
         Index("documents_kb_status_idx", "knowledge_base_id", "status"),
+        CheckConstraint(
+            "source_kind IN ('pdf', 'docx', 'text', 'markdown', 'html', 'code')",
+            name="documents_source_kind_ck",
+        ),
+        CheckConstraint(
+            "ingestion_progress BETWEEN 0 AND 100",
+            name="documents_ingestion_progress_ck",
+        ),
+        CheckConstraint("ingestion_attempts >= 0", name="documents_ingestion_attempts_ck"),
+        CheckConstraint("jsonb_typeof(tags) = 'array'", name="documents_tags_array_ck"),
+        CheckConstraint(
+            "jsonb_typeof(source_metadata) = 'object'",
+            name="documents_source_metadata_object_ck",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(ingestion_warnings) = 'array'",
+            name="documents_ingestion_warnings_array_ck",
+        ),
     )
 
 
@@ -253,6 +306,18 @@ class UploadSession(TimestampMixin, Base):
     )
     original_name: Mapped[str] = mapped_column(String(255), nullable=False)
     suffix: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_kind: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=SourceKind.TEXT, server_default=SourceKind.TEXT
+    )
+    language: Mapped[str | None] = mapped_column(String(64))
+    tags: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    source_uri: Mapped[str | None] = mapped_column(String(2_048))
+    source_path: Mapped[str | None] = mapped_column(String(1_024))
+    source_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
     declared_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     total_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     received_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
@@ -275,6 +340,15 @@ class UploadSession(TimestampMixin, Base):
         ),
         CheckConstraint("total_bytes > 0", name="upload_sessions_total_bytes_ck"),
         CheckConstraint("part_size_bytes > 0", name="upload_sessions_part_size_bytes_ck"),
+        CheckConstraint(
+            "source_kind IN ('pdf', 'docx', 'text', 'markdown', 'html', 'code')",
+            name="upload_sessions_source_kind_ck",
+        ),
+        CheckConstraint("jsonb_typeof(tags) = 'array'", name="upload_sessions_tags_array_ck"),
+        CheckConstraint(
+            "jsonb_typeof(source_metadata) = 'object'",
+            name="upload_sessions_source_metadata_object_ck",
+        ),
         Index("upload_sessions_kb_status_idx", "knowledge_base_id", "status"),
         Index("upload_sessions_expires_at_idx", "expires_at"),
         Index(
