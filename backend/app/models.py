@@ -65,6 +65,44 @@ class ProviderKind(enum.StrEnum):
     GENERATION = "generation"
 
 
+class ChunkLevel(enum.StrEnum):
+    CHILD = "child"
+    PARENT = "parent"
+    SECTION_SUMMARY = "section_summary"
+    DOCUMENT_SUMMARY = "document_summary"
+
+
+class ChunkContentType(enum.StrEnum):
+    PARAGRAPH = "paragraph"
+    LIST = "list"
+    TABLE = "table"
+    CODE = "code"
+    MIXED = "mixed"
+    SUMMARY = "summary"
+
+
+class ReindexJobStatus(enum.StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ReindexItemStatus(enum.StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ReindexSelection(enum.StrEnum):
+    CANARY = "canary"
+    ALL = "all"
+
+
 class User(TimestampMixin, Base):
     __tablename__ = "users"
 
@@ -119,6 +157,87 @@ class Document(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("knowledge_base_id", "sha256", name="documents_kb_sha256_uq"),
         Index("documents_kb_status_idx", "knowledge_base_id", "status"),
+    )
+
+
+class ReindexJob(TimestampMixin, Base):
+    __tablename__ = "reindex_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    target_chunking_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    selection_mode: Mapped[str] = mapped_column(String(20), nullable=False)
+    canary_percentage: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    batch_size: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=ReindexJobStatus.QUEUED
+    )
+    knowledge_base_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    total_documents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_documents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_documents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        CheckConstraint(
+            "target_chunking_version IN ('legacy', 'hierarchical_v1')",
+            name="reindex_jobs_target_version_ck",
+        ),
+        CheckConstraint(
+            "selection_mode IN ('canary', 'all')",
+            name="reindex_jobs_selection_ck",
+        ),
+        CheckConstraint(
+            "canary_percentage BETWEEN 1 AND 100",
+            name="reindex_jobs_canary_percentage_ck",
+        ),
+        CheckConstraint(
+            "batch_size BETWEEN 1 AND 100",
+            name="reindex_jobs_batch_size_ck",
+        ),
+        CheckConstraint(
+            "status IN ('queued', 'running', 'paused', 'completed', 'failed', "
+            "'cancelled')",
+            name="reindex_jobs_status_ck",
+        ),
+        CheckConstraint(
+            "total_documents >= 0 AND completed_documents >= 0 "
+            "AND failed_documents >= 0 "
+            "AND completed_documents + failed_documents <= total_documents",
+            name="reindex_jobs_counts_ck",
+        ),
+        Index("reindex_jobs_status_created_idx", "status", "created_at"),
+    )
+
+
+class ReindexItem(Base):
+    __tablename__ = "reindex_items"
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("reindex_jobs.id", ondelete="CASCADE"), primary_key=True
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=ReindexItemStatus.PENDING
+    )
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    safe_error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')",
+            name="reindex_items_status_ck",
+        ),
+        CheckConstraint("attempts >= 0", name="reindex_items_attempts_ck"),
+        Index("reindex_items_job_status_idx", "job_id", "status"),
     )
 
 
@@ -194,15 +313,92 @@ class Chunk(TimestampMixin, Base):
     document_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    parent_chunk_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("chunks.id", ondelete="CASCADE"), index=True
+    )
+    chunk_level: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=ChunkLevel.CHILD, server_default=ChunkLevel.CHILD
+    )
     ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     locator: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    start_page: Mapped[int | None] = mapped_column(Integer)
+    end_page: Mapped[int | None] = mapped_column(Integer)
+    start_offset: Mapped[int | None] = mapped_column(BigInteger)
+    end_offset: Mapped[int | None] = mapped_column(BigInteger)
+    heading_path: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    content_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=ChunkContentType.MIXED,
+        server_default=ChunkContentType.MIXED,
+    )
+    token_count: Mapped[int | None] = mapped_column(Integer)
+    chunking_version: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="legacy", server_default="legacy"
+    )
+    content_hash: Mapped[str | None] = mapped_column(String(64))
     search_vector: Mapped[Any | None] = mapped_column(TSVECTOR)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768))
-    embedding_model: Mapped[str] = mapped_column(String(120), nullable=False)
+    embedding_model: Mapped[str | None] = mapped_column(String(120))
 
     __table_args__ = (
-        UniqueConstraint("document_id", "ordinal", name="chunks_document_ordinal_uq"),
+        UniqueConstraint(
+            "document_id",
+            "chunk_level",
+            "ordinal",
+            name="chunks_document_level_ordinal_uq",
+        ),
+        CheckConstraint(
+            "chunk_level IN ('child', 'parent', 'section_summary', 'document_summary')",
+            name="chunks_level_ck",
+        ),
+        CheckConstraint(
+            "content_type IN ('paragraph', 'list', 'table', 'code', 'mixed', 'summary')",
+            name="chunks_content_type_ck",
+        ),
+        CheckConstraint(
+            "parent_chunk_id IS NULL OR parent_chunk_id <> id",
+            name="chunks_parent_not_self_ck",
+        ),
+        CheckConstraint(
+            "start_page IS NULL OR start_page > 0",
+            name="chunks_start_page_ck",
+        ),
+        CheckConstraint(
+            "end_page IS NULL OR end_page > 0",
+            name="chunks_end_page_ck",
+        ),
+        CheckConstraint(
+            "start_page IS NULL OR end_page IS NULL OR end_page >= start_page",
+            name="chunks_page_range_ck",
+        ),
+        CheckConstraint(
+            "start_offset IS NULL OR start_offset >= 0",
+            name="chunks_start_offset_ck",
+        ),
+        CheckConstraint(
+            "end_offset IS NULL OR end_offset >= 0",
+            name="chunks_end_offset_ck",
+        ),
+        CheckConstraint(
+            "start_offset IS NULL OR end_offset IS NULL OR end_offset >= start_offset",
+            name="chunks_offset_range_ck",
+        ),
+        CheckConstraint(
+            "token_count IS NULL OR token_count >= 0",
+            name="chunks_token_count_ck",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(heading_path) = 'array'",
+            name="chunks_heading_path_array_ck",
+        ),
+        CheckConstraint(
+            "content_hash IS NULL OR length(content_hash) = 64",
+            name="chunks_content_hash_length_ck",
+        ),
         Index("chunks_search_vector_gin", "search_vector", postgresql_using="gin"),
         Index(
             "chunks_embedding_hnsw",

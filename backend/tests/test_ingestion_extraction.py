@@ -9,6 +9,17 @@ from app.ingestion.errors import ExtractionError
 from app.ingestion.extraction import ExtractedSection, extract_document
 
 
+def test_plain_text_extraction_accepts_a_single_trailing_newline(tmp_path: Path) -> None:
+    path = tmp_path / "restart-proof.txt"
+    path.write_text("The upload checkpoint survived.\n", encoding="utf-8")
+
+    extracted = extract_document(path, "text/plain", 500)
+
+    assert [block.text for block in extracted.blocks] == [
+        "The upload checkpoint survived."
+    ]
+
+
 def test_markdown_extraction_preserves_heading_and_line_locator(tmp_path: Path) -> None:
     path = tmp_path / "guide.md"
     path.write_text(
@@ -19,6 +30,41 @@ def test_markdown_extraction_preserves_heading_and_line_locator(tmp_path: Path) 
 
     assert [section.locator["section"] for section in extracted.sections] == ["Setup", "Verify"]
     assert extracted.sections[0].locator["line_start"] == 1
+    assert [block.block_type for block in extracted.blocks] == [
+        "heading",
+        "paragraph",
+        "heading",
+        "paragraph",
+    ]
+    assert extracted.blocks[-1].heading_path == ["Setup", "Verify"]
+
+
+def test_markdown_extraction_marks_lists_tables_and_code(tmp_path: Path) -> None:
+    path = tmp_path / "structured.md"
+    path.write_text(
+        "# Data\n"
+        "- one\n"
+        "- two\n\n"
+        "| Key | Value |\n"
+        "| --- | --- |\n"
+        "| A | B |\n\n"
+        "```\n"
+        "x = 1\n"
+        "```\n",
+        encoding="utf-8",
+    )
+
+    extracted = extract_document(path, "text/markdown", 500)
+
+    assert [block.block_type for block in extracted.blocks] == [
+        "heading",
+        "list_item",
+        "list_item",
+        "table",
+        "code",
+    ]
+    assert extracted.blocks[3].text.count("\n") == 2
+    assert extracted.blocks[4].text == "x = 1"
 
 
 def test_docx_extraction_keeps_paragraphs_and_tables(tmp_path: Path) -> None:
@@ -39,6 +85,12 @@ def test_docx_extraction_keeps_paragraphs_and_tables(tmp_path: Path) -> None:
 
     assert any("Restart the worker" in section.text for section in extracted.sections)
     assert any("State | Ready" in section.text for section in extracted.sections)
+    assert [block.block_type for block in extracted.blocks] == [
+        "heading",
+        "paragraph",
+        "table",
+    ]
+    assert extracted.blocks[1].heading_path == ["Operations"]
 
 
 def test_image_only_pdf_is_rejected_without_partial_content(tmp_path: Path) -> None:

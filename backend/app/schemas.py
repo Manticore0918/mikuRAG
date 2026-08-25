@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.rag.citations import LocatorValue
 
 
 class UsernamePassword(BaseModel):
@@ -92,6 +94,52 @@ class DocumentRead(BaseModel):
     updated_at: datetime
 
 
+class ReindexJobCreate(BaseModel):
+    target_chunking_version: str = Field(pattern=r"^(legacy|hierarchical_v1)$")
+    selection_mode: str = Field(pattern=r"^(canary|all)$")
+    canary_percentage: int = Field(default=10, ge=1, le=100)
+    batch_size: int = Field(default=10, ge=1, le=100)
+    knowledge_base_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def require_full_percentage_for_all(self) -> "ReindexJobCreate":
+        if self.selection_mode == "all" and self.canary_percentage != 100:
+            raise ValueError("All-document selection requires canary_percentage=100")
+        return self
+
+
+class ReindexRollbackCreate(BaseModel):
+    batch_size: int = Field(default=10, ge=1, le=100)
+
+
+class ReindexJobRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    target_chunking_version: str
+    selection_mode: str
+    canary_percentage: int
+    batch_size: int
+    status: str
+    knowledge_base_id: uuid.UUID | None
+    created_by_id: uuid.UUID | None
+    total_documents: int
+    completed_documents: int
+    failed_documents: int
+    last_error: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChunkingRolloutStatusRead(BaseModel):
+    configured_phase: str
+    chunking_version: str
+    hierarchical_retrieval_enabled: bool
+    summary_generation_enabled: bool
+    document_version_counts: dict[str, int]
+    active_jobs: list[ReindexJobRead]
+
+
 class UploadSessionCreate(BaseModel):
     original_name: str = Field(min_length=1, max_length=255)
     size_bytes: int = Field(gt=0)
@@ -147,7 +195,7 @@ class ConversationRead(BaseModel):
 class CitationRead(BaseModel):
     id: uuid.UUID
     document_name: str
-    locator: dict[str, int | str]
+    locator: dict[str, LocatorValue]
     excerpt: str
     retrieval_rank: int
     retrieval_score: float | None

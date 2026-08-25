@@ -1,5 +1,7 @@
 import math
 from collections.abc import Sequence
+from dataclasses import dataclass
+from time import perf_counter
 
 import httpx
 
@@ -7,6 +9,13 @@ from app.config import Settings, get_settings
 from app.ingestion.errors import EmbeddingProviderError
 
 EMBEDDING_DIMENSION = 768
+
+
+@dataclass
+class EmbeddingMetrics:
+    request_count: int = 0
+    input_count: int = 0
+    duration_ms: float = 0.0
 
 
 def parse_embeddings(payload: object, expected_count: int) -> list[list[float]]:
@@ -34,6 +43,8 @@ async def embed_texts(
     texts: Sequence[str],
     settings: Settings | None = None,
     client: httpx.AsyncClient | None = None,
+    *,
+    metrics: EmbeddingMetrics | None = None,
 ) -> list[list[float]]:
     active_settings = settings or get_settings()
     if active_settings.embedding_api_key is None:
@@ -44,6 +55,10 @@ async def embed_texts(
     try:
         for start in range(0, len(texts), active_settings.embedding_batch_size):
             batch = texts[start : start + active_settings.embedding_batch_size]
+            request_started = perf_counter()
+            if metrics is not None:
+                metrics.request_count += 1
+                metrics.input_count += len(batch)
             try:
                 response = await http_client.post(
                     active_settings.embedding_endpoint,
@@ -64,6 +79,9 @@ async def embed_texts(
                 raise EmbeddingProviderError(
                     "The embedding provider is unavailable or rejected the request"
                 ) from error
+            finally:
+                if metrics is not None:
+                    metrics.duration_ms += (perf_counter() - request_started) * 1_000
             vectors.extend(parse_embeddings(payload, len(batch)))
     finally:
         if owns_client:

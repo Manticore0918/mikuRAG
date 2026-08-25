@@ -2,7 +2,12 @@ import httpx
 import pytest
 
 from app.config import Settings
-from app.ingestion.embeddings import EMBEDDING_DIMENSION, embed_texts, parse_embeddings
+from app.ingestion.embeddings import (
+    EMBEDDING_DIMENSION,
+    EmbeddingMetrics,
+    embed_texts,
+    parse_embeddings,
+)
 from app.ingestion.errors import EmbeddingProviderError
 
 
@@ -45,6 +50,7 @@ def test_embedding_response_rejects_wrong_vector_dimension() -> None:
 @pytest.mark.asyncio
 async def test_embedding_client_batches_native_model_studio_requests() -> None:
     request_sizes: list[int] = []
+    metrics = EmbeddingMetrics()
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "Bearer provider-secret"
@@ -65,7 +71,15 @@ async def test_embedding_client_batches_native_model_studio_requests() -> None:
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        result = await embed_texts(["one", "two", "three"], settings(), client)
+        result = await embed_texts(
+            ["one", "two", "three"],
+            settings(),
+            client,
+            metrics=metrics,
+        )
 
     assert request_sizes == [2, 1]
     assert len(result) == 3
+    assert metrics.request_count == 2
+    assert metrics.input_count == 3
+    assert metrics.duration_ms >= 0

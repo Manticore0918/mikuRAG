@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.ingestion.extraction import ExtractedSection
+from app.ingestion.contracts import ExtractedSection
 
 
 @dataclass(frozen=True)
