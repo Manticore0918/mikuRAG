@@ -12,7 +12,10 @@ from app.config import get_settings
 from app.database import session_factory
 from app.ingestion.embeddings import embed_texts
 from app.ingestion.errors import EmbeddingProviderError
+from app.ingestion.tokenization import create_tokenizer
 from app.models import Citation, Conversation, Message, MessageStatus
+from app.observability import emit_observation
+from app.rag.citations import public_locator
 from app.rag.generation import GenerationProviderError, complete_json, stream_json
 from app.rag.grounding import (
     GroundingValidationError,
@@ -24,7 +27,13 @@ from app.rag.grounding import (
     rewrite_messages,
     validate_and_render,
 )
+from app.rag.query_classification import (
+    DeterministicQueryClassifier,
+    QueryClassifier,
+    QueryKind,
+)
 from app.rag.retrieval import Evidence, retrieve_evidence
+from app.rag.summary_retrieval import SummaryContext, retrieve_summary_context
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +54,7 @@ FOLLOW_UP_REFERENCE = re.compile(
     r"\b(?:it|its|this|that|these|those|they|them|same|former|latter)\b",
     re.IGNORECASE,
 )
+query_classifier: QueryClassifier = DeterministicQueryClassifier()
 
 
 def sse_event(event: str, data: object) -> str:
@@ -55,7 +65,7 @@ def citation_payload(citation: Citation, conversation_id: uuid.UUID) -> dict[str
     return {
         "id": str(citation.id),
         "document_name": citation.document_name,
-        "locator": citation.locator,
+        "locator": public_locator(citation.locator),
         "excerpt": citation.excerpt,
         "retrieval_rank": citation.retrieval_rank,
         "retrieval_score": citation.retrieval_score,
@@ -103,6 +113,8 @@ async def _persist_complete(
     *,
     outcome: str,
     usage: dict[str, int] | None = None,
+    query_kind: str | None = None,
+    summary_context_count: int = 0,
 ) -> list[Citation]:
     settings = get_settings()
     citations = [
@@ -111,7 +123,7 @@ async def _persist_complete(
             message_id=assistant_message_id,
             document_id=item.document_id,
             document_name=item.document_name,
-            locator=item.locator,
+            locator=public_locator(item.locator),
             excerpt=item.text[:1_500],
             retrieval_rank=item.retrieval_rank,
             retrieval_score=item.retrieval_score,
@@ -130,6 +142,8 @@ async def _persist_complete(
             "embedding_model": settings.embedding_model_id,
             "generation_model": settings.generation_model_id,
             "evidence_count": len(evidence),
+            "query_kind": query_kind,
+            "summary_context_count": summary_context_count,
             "usage": usage or {},
         }
         conversation.updated_at = datetime.now(UTC)
@@ -179,8 +193,11 @@ async def _generate_grounded_answer(
     question: str,
     history: list[HistoryMessage],
     evidence: list[Evidence],
+    summary_context: list[SummaryContext] | None = None,
 ) -> tuple[RenderedAnswer, dict[str, int]]:
-    generation = await stream_json(grounded_messages(question, history, evidence))
+    generation = await stream_json(
+        grounded_messages(question, history, evidence, summary_context)
+    )
     try:
         return validate_and_render(generation.payload, evidence), generation.usage
     except GroundingValidationError as error:
@@ -189,7 +206,12 @@ async def _generate_grounded_answer(
 
     try:
         repair = await complete_json(
-            grounded_repair_messages(question, evidence, rejection_reason)
+            grounded_repair_messages(
+                question,
+                evidence,
+                rejection_reason,
+                summary_context,
+            )
         )
         rendered = validate_and_render(repair.payload, evidence)
     except (GenerationProviderError, GroundingValidationError) as repair_error:
@@ -210,21 +232,38 @@ async def turn_events(
     user_message_id: uuid.UUID,
     assistant_message_id: uuid.UUID,
 ) -> AsyncIterator[str]:
+    turn_stage = "loading"
     try:
         yield sse_event("status", {"stage": "retrieving"})
+        turn_stage = "retrieving"
         conversation, user_message, history = await _load_turn(
             conversation_id, user_message_id
         )
         query, rewrite_usage = await _resolve_query(user_message.content, history)
+        classification = query_classifier.classify(query)
+        settings = get_settings()
         query_vector = (await embed_texts([query]))[0]
+        summary_context: list[SummaryContext] = []
         async with session_factory() as session:
             evidence, sufficient = await retrieve_evidence(
                 session,
                 conversation.knowledge_base_id,
                 query,
                 query_vector,
-                get_settings(),
+                settings,
             )
+            if (
+                classification.kind == QueryKind.BROAD
+                and settings.hierarchical_retrieval_enabled
+            ):
+                summary_context = await retrieve_summary_context(
+                    session,
+                    conversation.knowledge_base_id,
+                    query,
+                    query_vector,
+                    settings,
+                    create_tokenizer(settings.chunk_tokenizer),
+                )
 
         if not sufficient:
             citations = await _persist_complete(
@@ -234,6 +273,8 @@ async def turn_events(
                 [],
                 outcome="insufficient_evidence",
                 usage=rewrite_usage,
+                query_kind=classification.kind,
+                summary_context_count=len(summary_context),
             )
             yield sse_event(
                 "start", {"message_id": str(assistant_message_id), "status": "complete"}
@@ -244,10 +285,15 @@ async def turn_events(
             return
 
         yield sse_event("status", {"stage": "generating"})
+        turn_stage = "generating"
         rendered, generation_usage = await _generate_grounded_answer(
-            user_message.content, history, evidence
+            user_message.content,
+            history,
+            evidence,
+            summary_context,
         )
         yield sse_event("status", {"stage": "validating"})
+        turn_stage = "validating"
 
         citations = await _persist_complete(
             assistant_message_id,
@@ -256,6 +302,8 @@ async def turn_events(
             rendered.used_evidence,
             outcome=rendered.outcome,
             usage=_merge_usage(rewrite_usage, generation_usage),
+            query_kind=classification.kind,
+            summary_context_count=len(summary_context),
         )
         yield sse_event(
             "start", {"message_id": str(assistant_message_id), "status": "complete"}
@@ -268,13 +316,34 @@ async def turn_events(
         )
         yield sse_event("done", {"outcome": rendered.outcome})
     except asyncio.CancelledError:
+        emit_observation(
+            logger,
+            "rag_turn_failure",
+            conversation_id=str(conversation_id),
+            terminal_stage=turn_stage,
+            failure_category="client_disconnected",
+        )
         await asyncio.shield(_mark_failed(assistant_message_id, "client_disconnected"))
         raise
     except (EmbeddingProviderError, GenerationProviderError, GroundingValidationError) as error:
+        emit_observation(
+            logger,
+            "rag_turn_failure",
+            conversation_id=str(conversation_id),
+            terminal_stage=turn_stage,
+            failure_category="provider_or_grounding_error",
+        )
         logger.warning("RAG turn failed for conversation %s: %s", conversation_id, error)
         await _mark_failed(assistant_message_id, "provider_or_grounding_error")
         yield sse_event("error", {"message": FAILED_ANSWER})
     except Exception:
+        emit_observation(
+            logger,
+            "rag_turn_failure",
+            conversation_id=str(conversation_id),
+            terminal_stage=turn_stage,
+            failure_category="unexpected_error",
+        )
         logger.exception("Unexpected RAG turn failure for conversation %s", conversation_id)
         await _mark_failed(assistant_message_id, "unexpected_error")
         yield sse_event("error", {"message": FAILED_ANSWER})
