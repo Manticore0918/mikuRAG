@@ -66,7 +66,7 @@ export type Conversation = {
 export type Citation = {
   id: string
   document_name: string
-  locator: Record<string, string | number>
+  locator: Record<string, string | number | string[]>
   excerpt: string
   retrieval_rank: number
   retrieval_score: number | null

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import ChatPanel from './ChatPanel'
+import { formatCitationLocator } from './citationFormatting'
 
 const knowledgeBases = [{
   id: 'kb-1',
@@ -13,6 +14,21 @@ const knowledgeBases = [{
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+})
+
+test('formats compatible page locators and hides internal hierarchy metadata', () => {
+  expect(formatCitationLocator({
+    page: 14,
+    start_page: 14,
+    end_page: 14,
+    heading_path: ['Guide', 'Setup'],
+    source_parent_id: 'internal',
+  })).toBe('p. 14 · Guide › Setup')
+  expect(formatCitationLocator({
+    start_page: 14,
+    end_page: 15,
+  })).toBe('pp. 14-15')
+  expect(formatCitationLocator({ section: 'Access' })).toBe('section: Access')
 })
 
 test('shows validated Citations with expandable evidence and source access', async () => {
@@ -58,6 +74,7 @@ test('shows validated Citations with expandable evidence and source access', asy
   expect(await screen.findByText('Approval is required.')).toBeInTheDocument()
   fireEvent.click(screen.getByText('policy.pdf'))
   expect(screen.getByText('All requests require approval.')).toBeInTheDocument()
+  expect(screen.getByText('p. 2')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Open source' })).toHaveAttribute('href', '/api/v1/source')
 })
 

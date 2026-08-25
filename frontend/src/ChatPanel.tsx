@@ -13,6 +13,7 @@ import {
   type KnowledgeBase,
   type ServerEvent,
 } from './api'
+import { formatCitationLocator } from './citationFormatting'
 
 type ChatPanelProps = {
   knowledgeBases: KnowledgeBase[]
@@ -47,7 +48,7 @@ function CitationCards({ citations }: { citations: Citation[] }) {
           <summary><span>[{index + 1}]</span> {citation.document_name}</summary>
           <p>{citation.excerpt}</p>
           <div className="citation-meta">
-            <span>{Object.entries(citation.locator).map(([key, value]) => `${key}: ${value}`).join(' · ') || 'Document excerpt'}</span>
+            <span>{formatCitationLocator(citation.locator)}</span>
             {citation.source_available && citation.source_url
               ? <a href={citation.source_url} rel="noreferrer" target="_blank">Open source</a>
               : <span>Source no longer available</span>}
