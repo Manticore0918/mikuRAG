@@ -6,7 +6,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import admin, auth, conversations, documents, knowledge_bases, uploads
+from app.api import (
+    admin,
+    auth,
+    conversations,
+    documents,
+    knowledge_bases,
+    rollout,
+    uploads,
+)
 from app.config import get_settings
 from app.database import close_database, session_factory
 from app.health import readiness
@@ -54,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(knowledge_bases.router, prefix="/api/v1")
     app.include_router(admin.router, prefix="/api/v1")
     app.include_router(documents.router, prefix="/api/v1")
+    app.include_router(rollout.router, prefix="/api/v1")
     app.include_router(uploads.router, prefix="/api/v1")
     app.include_router(conversations.router, prefix="/api/v1")
 

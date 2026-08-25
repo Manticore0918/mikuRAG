@@ -1,0 +1,19 @@
+{
+  "schema_version": "acceptance_operational_v1",
+  "evidence": {
+    "source_coverage_verified": null,
+    "idempotent_reingestion_verified": null,
+    "rollback_verified": null,
+    "document_deletion_verified": null,
+    "document_retry_verified": null,
+    "citation_compatibility_verified": null
+  },
+  "notes": {
+    "source_coverage_verified": "Set after property and integration suites pass for the release commit.",
+    "idempotent_reingestion_verified": "Set after stable IDs and repeated replacement are verified.",
+    "rollback_verified": "Set after a canary cohort completes a hierarchical-to-legacy rollback.",
+    "document_deletion_verified": "Set after deletion regression and canary checks pass.",
+    "document_retry_verified": "Set after failed-document retry regression and canary checks pass.",
+    "citation_compatibility_verified": "Set after legacy and range citation flows pass."
+  }
+}

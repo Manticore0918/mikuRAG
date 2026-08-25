@@ -1,0 +1,223 @@
+{
+  "schema_version": "chunking_risks_v1",
+  "risks": [
+    {
+      "risk_id": "R1_embedding_storage_growth",
+      "risk": "More chunks increase embedding requests, provider cost, and database storage.",
+      "controls": [
+        {
+          "control_id": "bounded_child_embeddings",
+          "description": "Token bounds cap chunk counts, hashes make output stable, and only searchable children receive embeddings.",
+          "code_paths": [
+            "backend/app/ingestion/hierarchical_chunking.py",
+            "backend/app/ingestion/persistence.py",
+            "backend/app/benchmarking.py"
+          ]
+        }
+      ],
+      "verification": [
+        "backend/tests/test_ingestion_pipeline.py::test_hierarchical_models_embed_only_children_and_use_stable_ids",
+        "backend/tests/test_benchmarking.py::test_ingestion_matrix_covers_required_document_sizes_and_scales_linearly"
+      ],
+      "monitoring_signals": [
+        "document_ingestion.child_count",
+        "document_ingestion.embedding_request_count",
+        "capacity_benchmark_v1.estimated_storage_bytes"
+      ],
+      "residual_risk": "Provider prices and corpus structure can still make an accepted chunk count too expensive."
+    },
+    {
+      "risk_id": "R2_parent_prompt_flood",
+      "risk": "Parent or neighbor expansion can consume the generation context window.",
+      "controls": [
+        {
+          "control_id": "strict_evidence_budget",
+          "description": "Parent promotion is size bounded, adjacent passages are capped, and final evidence obeys one total token budget.",
+          "code_paths": [
+            "backend/app/rag/retrieval.py",
+            "backend/app/rag/evidence_assembly.py",
+            "backend/app/config.py"
+          ]
+        }
+      ],
+      "verification": [
+        "backend/tests/test_hierarchical_retrieval.py::test_evidence_assembly_enforces_token_and_item_budgets",
+        "backend/tests/test_hierarchical_retrieval.py::test_multiple_matches_promote_a_bounded_parent"
+      ],
+      "monitoring_signals": [
+        "retrieval_decision.evidence_token_count",
+        "retrieval_decision.parent_promotion_count",
+        "retrieval_decision.drop_counts"
+      ],
+      "residual_risk": "A budget that fits the model can still leave too little room for conversation history or output."
+    },
+    {
+      "risk_id": "R3_heading_detection",
+      "risk": "Unreliable heading detection can create misleading section boundaries.",
+      "controls": [
+        {
+          "control_id": "ordered_fallback_grouping",
+          "description": "Conservative heading heuristics fall back to ordered paragraph grouping and bounded parents when headings are absent.",
+          "code_paths": [
+            "backend/app/ingestion/extraction.py",
+            "backend/app/ingestion/hierarchical_chunking.py"
+          ]
+        }
+      ],
+      "verification": [
+        "backend/tests/test_hierarchical_chunking.py::test_heading_boundaries_create_distinct_parents_and_parent_links",
+        "backend/tests/test_chunking_integration.py::test_mixed_pdf_docx_markdown_and_text_knowledge_base"
+      ],
+      "monitoring_signals": [
+        "document_ingestion.parent_count",
+        "document_ingestion.child_token_distribution"
+      ],
+      "residual_risk": "Typography-only headings may remain indistinguishable from short body lines without a richer layout model."
+    },
+    {
+      "risk_id": "R4_ocr_latency_cost",
+      "risk": "OCR fallback can add latency and external processing cost.",
+      "controls": [
+        {
+          "control_id": "sparse_page_only_ocr",
+          "description": "Fallback extraction runs only when the fast PDF text is sparse and records every use as a warning.",
+          "code_paths": [
+            "backend/app/ingestion/extraction.py",
+            "backend/app/ingestion/tasks.py"
+          ]
+        }
+      ],
+      "verification": [
+        "backend/tests/test_ingestion_normalization.py::test_pdf_extraction_records_empty_pages_and_fallback_usage",
+        "backend/tests/test_chunking_integration.py::test_scanned_pdf_uses_ocr_fallback_before_chunking"
+      ],
+      "monitoring_signals": [
+        "document_ingestion.ocr_fallback_page_count",
+        "document_ingestion.extraction_duration_ms"
+      ],
+      "residual_risk": "Large scanned corpora can legitimately require OCR on most pages and exceed normal ingestion targets."
+    },
+    {
+      "risk_id": "R5_overlap_redundancy",
+      "risk": "Repeated overlap can return duplicate evidence and waste prompt tokens.",
+      "controls": [
+        {
+          "control_id": "deduplicate_and_merge",
+          "description": "Hash and range duplicate suppression runs before diversity selection, while adjacent chunks merge with exact overlap removal.",
+          "code_paths": [
+            "backend/app/rag/evidence_assembly.py"
+          ]
+        }
+      ],
+      "verification": [
+        "backend/tests/test_hierarchical_retrieval.py::test_duplicate_and_high_overlap_candidates_are_suppressed",
+        "backend/tests/test_hierarchical_retrieval.py::test_adjacent_chunks_merge_and_remove_exact_overlap"
+      ],
+      "monitoring_signals": [
+        "retrieval_decision.drop_counts",
+        "retrieval_decision.evidence_token_count"
+      ],
+      "residual_risk": "Semantically redundant passages with different hashes and ranges may still survive deterministic de-duplication."
+    },
+    {
+      "risk_id": "R6_reranker_latency",
+      "risk": "Reranking too many candidates can dominate retrieval latency.",
+      "controls": [
+        {
+          "control_id": "bounded_measured_reranking",
+          "description": "Only the fused top candidate pool is reranked, with separate duration metrics and configurable limits.",
+          "code_paths": [
+            "backend/app/rag/retrieval.py",
+            "backend/app/rag/reranking.py",
+            "backend/app/config.py"
+          ]
+        }
+      ],
+      "verification": [
+        "backend/tests/test_hierarchical_retrieval.py::test_deterministic_reranker_uses_query_and_heading_terms",
+        "backend/tests/test_observability.py::test_retrieval_observation_records_decisions_without_document_content"
+      ],
+      "monitoring_signals": [
+        "retrieval_decision.reranking_duration_ms",
+        "retrieval_decision.reranked_candidate_count"
+      ],
+      "residual_risk": "A future remote or cross-encoder reranker can regress independently of deterministic local tests."
+    },
+    {
+      "risk_id": "R7_citation_migration",
+      "risk": "Schema migration or hierarchical locators can break existing citation rendering.",
+      "controls": [
+        {
+          "control_id": "legacy_locator_compatibility",
+          "description": "Migration backfills legacy page fields and public locators preserve the old page shape while adding safe ranges.",
+          "code_paths": [
+            "backend/migrations/versions/0006_hierarchical_chunk_data_model.py",
+            "backend/app/rag/citations.py",
+            "frontend/src/citationFormatting.ts"
+          ]
+        }
+      ],
+      "verification": [
+        "backend/tests/test_citations.py::test_public_locator_preserves_legacy_page_and_adds_range_fields",
+        "backend/tests/test_citations.py::test_citation_payload_sanitizes_existing_rows_and_schema_accepts_heading_path"
+      ],
+      "monitoring_signals": [
+        "acceptance.citation_page_ranges_correct",
+        "acceptance.citation_compatibility_verified"
+      ],
+      "residual_risk": "Previously stored malformed locators may require data repair outside the compatibility normalizer."
+    },
+    {
+      "risk_id": "R8_format_overfitting",
+      "risk": "Chunk tuning against one PDF style can regress other layouts and file formats.",
+      "controls": [
+        {
+          "control_id": "mixed_format_evaluation",
+          "description": "Integration and property suites cover PDF layouts, OCR, tables, DOCX, Markdown, plain text, and headingless documents.",
+          "code_paths": [
+            "backend/app/ingestion/extraction.py",
+            "backend/tests/test_chunking_integration.py",
+            "backend/evaluation_sets/retrieval_v1.json"
+          ]
+        }
+      ],
+      "verification": [
+        "backend/tests/test_chunking_integration.py::test_cross_page_multicolumn_and_spanning_table_pdf_cases",
+        "backend/tests/test_chunking_integration.py::test_mixed_pdf_docx_markdown_and_text_knowledge_base",
+        "backend/tests/test_chunking_properties.py::test_generated_block_sequences_preserve_hierarchy_invariants"
+      ],
+      "monitoring_signals": [
+        "document_ingestion.empty_page_count",
+        "document_ingestion.child_token_distribution",
+        "retrieval_evaluation.category"
+      ],
+      "residual_risk": "The synthetic and curated corpus cannot represent every producer-specific parsing defect."
+    },
+    {
+      "risk_id": "R9_reindex_overload",
+      "risk": "Re-indexing can overload workers, the embedding provider, or database indexes.",
+      "controls": [
+        {
+          "control_id": "bounded_paced_retryable_batches",
+          "description": "One active job claims bounded batches, processes Documents sequentially, delays the next batch, and caps retries for transient embedding or persistence failures.",
+          "code_paths": [
+            "backend/app/api/rollout.py",
+            "backend/app/ingestion/reindexing.py",
+            "backend/app/ingestion/tasks.py",
+            "backend/app/config.py"
+          ]
+        }
+      ],
+      "verification": [
+        "backend/tests/test_rollout.py::test_job_creation_is_durable_and_pauses_when_queue_is_unavailable",
+        "backend/tests/test_rollout.py::test_transient_reindex_failures_retry_only_within_the_cap"
+      ],
+      "monitoring_signals": [
+        "reindex_job_progress.pending_documents",
+        "reindex_job_progress.failed_documents",
+        "document_ingestion.embedding_request_count"
+      ],
+      "residual_risk": "A single very large Document can still saturate one worker or provider request window."
+    }
+  ]
+}

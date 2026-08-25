@@ -1,0 +1,78 @@
+{
+  "version": "retrieval_v1",
+  "description": "Versioned offline retrieval cases for comparing legacy and hierarchical chunking.",
+  "cases": [
+    {
+      "case_id": "narrow_leave_limit",
+      "category": "narrow_fact",
+      "query": "What is the annual leave carry-over limit?",
+      "relevant_passage_ids": ["hr-leave-p3"],
+      "required_passage_ids": ["hr-leave-p3"],
+      "expected_citation_pages": [3],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "lexical_incident_code",
+      "category": "lexical_exact",
+      "query": "What does incident code SEC-417 require?",
+      "relevant_passage_ids": ["security-codes-p8"],
+      "required_passage_ids": ["security-codes-p8"],
+      "expected_citation_pages": [8],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "semantic_expense_approval",
+      "category": "semantic_paraphrase",
+      "query": "Who must sign off before an employee buys costly equipment?",
+      "relevant_passage_ids": ["finance-assets-p12"],
+      "required_passage_ids": ["finance-assets-p12"],
+      "expected_citation_pages": [12],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "cross_page_access_rule",
+      "category": "cross_page",
+      "query": "What conditions apply to temporary administrator access?",
+      "relevant_passage_ids": ["security-access-p14-15"],
+      "required_passage_ids": ["security-access-p14-15"],
+      "expected_citation_pages": [14, 15],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "multi_section_onboarding",
+      "category": "multi_section",
+      "query": "Which HR and security steps must a new starter complete?",
+      "relevant_passage_ids": ["hr-onboarding-p2", "security-onboarding-p6"],
+      "required_passage_ids": ["hr-onboarding-p2", "security-onboarding-p6"],
+      "expected_citation_pages": [2, 6],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "multi_document_comparison",
+      "category": "multi_document",
+      "query": "Compare contractor and employee travel approval.",
+      "relevant_passage_ids": ["contractors-travel-p4", "employees-travel-p9"],
+      "required_passage_ids": ["contractors-travel-p4", "employees-travel-p9"],
+      "expected_citation_pages": [4, 9],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "whole_document_summary",
+      "category": "whole_document_summary",
+      "query": "Summarize the disaster recovery handbook.",
+      "relevant_passage_ids": ["dr-summary", "dr-recovery-p5", "dr-testing-p11"],
+      "required_passage_ids": ["dr-recovery-p5", "dr-testing-p11"],
+      "expected_citation_pages": [5, 11],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "unsupported_office_pet",
+      "category": "unsupported",
+      "query": "What is the office pet's birthday?",
+      "relevant_passage_ids": [],
+      "required_passage_ids": [],
+      "expected_citation_pages": [],
+      "expects_supported_answer": false
+    }
+  ]
+}
