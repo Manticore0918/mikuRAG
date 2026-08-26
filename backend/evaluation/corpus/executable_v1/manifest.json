@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "version": "executable_v1",
+  "description": "Small redistributable corpus for exercising real ingestion and retrieval.",
+  "documents": [
+    {
+      "document_id": "leave-policy",
+      "passage_id": "hr-leave-p3",
+      "path": "documents/leave-policy.md"
+    },
+    {
+      "document_id": "security-incident",
+      "passage_id": "security-codes-p8",
+      "path": "documents/security-incident.md"
+    },
+    {
+      "document_id": "asset-approval",
+      "passage_id": "finance-assets-p12",
+      "path": "documents/asset-approval.md"
+    },
+    {
+      "document_id": "temporary-access",
+      "passage_id": "security-access-p14-15",
+      "path": "documents/temporary-access.md"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "narrow_leave_limit",
+      "category": "narrow_fact",
+      "query": "What is the annual leave carry-over limit?",
+      "relevant_passage_ids": ["hr-leave-p3"],
+      "required_passage_ids": ["hr-leave-p3"],
+      "expected_citation_pages": [],
+      "expected_answer_terms": ["five days"],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "lexical_incident_code",
+      "category": "lexical_exact",
+      "query": "What actions does incident code SEC-417 require?",
+      "relevant_passage_ids": ["security-codes-p8"],
+      "required_passage_ids": ["security-codes-p8"],
+      "expected_citation_pages": [],
+      "expected_answer_terms": ["revoke", "thirty minutes"],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "semantic_expense_approval",
+      "category": "semantic_paraphrase",
+      "query": "Who must sign off before an employee buys costly equipment?",
+      "relevant_passage_ids": ["finance-assets-p12"],
+      "required_passage_ids": ["finance-assets-p12"],
+      "expected_citation_pages": [],
+      "expected_answer_terms": ["department head", "finance controller"],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "temporary_access_controls",
+      "category": "multi_constraint",
+      "query": "What controls and expiry apply to temporary administrator access?",
+      "relevant_passage_ids": ["security-access-p14-15"],
+      "required_passage_ids": ["security-access-p14-15"],
+      "expected_citation_pages": [],
+      "expected_answer_terms": ["four hours", "multi-factor authentication"],
+      "expects_supported_answer": true
+    },
+    {
+      "case_id": "unsupported_office_pet",
+      "category": "unsupported",
+      "query": "What is the office pet's birthday?",
+      "relevant_passage_ids": [],
+      "required_passage_ids": [],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [],
+      "expects_supported_answer": false
+    }
+  ]
+}

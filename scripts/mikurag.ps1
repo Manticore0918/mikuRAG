@@ -1,6 +1,6 @@
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("setup", "checks", "migrations", "seed", "smoke", "restart-smoke")]
+    [ValidateSet("setup", "checks", "migrations", "seed", "smoke", "restart-smoke", "evaluate")]
     [string]$Command = "checks"
 )
 
@@ -59,6 +59,10 @@ try {
         "migrations" {
             python scripts\migration_smoke.py
             Assert-NativeSuccess "Migration smoke"
+        }
+        "evaluate" {
+            docker compose --profile tools run --rm evaluate
+            Assert-NativeSuccess "Executable evaluation"
         }
         "seed" {
             docker compose run --rm `

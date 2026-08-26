@@ -27,6 +27,9 @@ case "$COMMAND" in
   migrations)
     python3 scripts/migration_smoke.py
     ;;
+  evaluate)
+    docker compose --profile tools run --rm evaluate
+    ;;
   seed)
     docker compose run --rm \
       -e MIKURAG_DEMO_ADMIN_PASSWORD \
@@ -41,7 +44,7 @@ case "$COMMAND" in
     .venv/bin/python scripts/restart_smoke.py
     ;;
   *)
-    echo "Usage: $0 {setup|checks|migrations|seed|smoke|restart-smoke}" >&2
+    echo "Usage: $0 {setup|checks|migrations|seed|smoke|restart-smoke|evaluate}" >&2
     exit 2
     ;;
 esac

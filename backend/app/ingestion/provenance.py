@@ -26,6 +26,7 @@ _RETRIEVAL_METADATA_KEYS = {
     "author",
     "branch",
     "commit",
+    "passage_id",
     "repository",
     "revision",
     "title",

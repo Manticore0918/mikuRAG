@@ -92,6 +92,20 @@ services:
         condition: service_healthy
     profiles: ["tools"]
 
+  evaluate:
+    build: ./backend
+    command: ["python", "-m", "app.evaluation_cli"]
+    environment: *backend-environment
+    volumes:
+      - uploads:/data/uploads
+      - ./backend/evaluation/results:/app/evaluation/results
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ["tools"]
+
   backend:
     build: ./backend
     environment: *backend-environment

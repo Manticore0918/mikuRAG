@@ -227,6 +227,22 @@ async def _generate_grounded_answer(
     return rendered, _merge_usage(generation.usage, repair.usage)
 
 
+async def generate_grounded_answer(
+    question: str,
+    history: list[HistoryMessage],
+    evidence: list[Evidence],
+    summary_context: list[SummaryContext] | None = None,
+) -> tuple[RenderedAnswer, dict[str, int]]:
+    """Run the production grounded generation and validation path."""
+
+    return await _generate_grounded_answer(
+        question,
+        history,
+        evidence,
+        summary_context,
+    )
+
+
 async def turn_events(
     conversation_id: uuid.UUID,
     user_message_id: uuid.UUID,

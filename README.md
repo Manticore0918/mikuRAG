@@ -121,6 +121,23 @@ npm run lint
 npm run build
 ```
 
+## Executable evaluation
+
+The versioned `executable_v1` corpus can be ingested into a unique, isolated
+Knowledge Base and queried through the production embedding and hybrid retrieval
+path:
+
+```powershell
+.\scripts\mikurag.ps1 evaluate
+```
+
+The runner waits for real Celery Ingestion, writes `raw-run.json`, `report.json`,
+and `report.md` under `backend/evaluation/results/`, then deletes its Knowledge
+Base and managed source files. Add `--answers` to the direct evaluation CLI to
+also execute grounded generation and validation. See
+[`docs/EVALUATION-RUNNER.md`](./docs/EVALUATION-RUNNER.md) for the lifecycle,
+corpus schema, failure behavior, and artifact contract.
+
 ## Reproducible baseline demo
 
 The versioned demo contains a two-page PDF plus Markdown, HTML, Python, and
@@ -160,6 +177,7 @@ expected evidence.
 
 - Product language: [`CONTEXT.md`](./CONTEXT.md)
 - Checkpoint-1 multi-source demo and proof script: [`docs/BASELINE-DEMO.md`](./docs/BASELINE-DEMO.md)
+- Executable evaluation runner: [`docs/EVALUATION-RUNNER.md`](./docs/EVALUATION-RUNNER.md)
 - Approved MVP plan: [`docs/MVP-PLAN.md`](./docs/MVP-PLAN.md)
 - Hierarchical chunking rollout and rollback: [`docs/CHUNKING-CONFIG.md`](./docs/CHUNKING-CONFIG.md)
 - Hierarchical chunking observation events: [`docs/CHUNKING-OBSERVABILITY.md`](./docs/CHUNKING-OBSERVABILITY.md)
