@@ -138,6 +138,9 @@ def test_versioned_executable_corpus_has_stable_documents_and_cases() -> None:
     dataset = load_executable_dataset(CORPUS)
 
     assert dataset.version == "executable_v1"
+    assert dataset.license_id == "CC0-1.0"
+    assert dataset.provenance == "synthetic"
+    assert dataset.contains_sensitive_data is False
     assert len(dataset.documents) == 4
     assert len(dataset.cases) == 5
     assert {item.passage_id for item in dataset.documents} == {
@@ -145,6 +148,12 @@ def test_versioned_executable_corpus_has_stable_documents_and_cases() -> None:
         "security-codes-p8",
         "finance-assets-p12",
         "security-access-p14-15",
+    }
+    assert {item.locator_id for item in dataset.documents} == {
+        "markdown:leave-policy#annual-leave-carry-over",
+        "markdown:security-incident#incident-code-sec-417",
+        "markdown:asset-approval#high-value-equipment-approval",
+        "markdown:temporary-access#temporary-administrator-access",
     }
     assert any(not item.expects_supported_answer for item in dataset.cases)
 

@@ -2,25 +2,33 @@
   "schema_version": 1,
   "version": "executable_v1",
   "description": "Small redistributable corpus for exercising real ingestion and retrieval.",
+  "license": "CC0-1.0",
+  "license_file": "LICENSE.txt",
+  "provenance": "synthetic",
+  "contains_sensitive_data": false,
   "documents": [
     {
       "document_id": "leave-policy",
       "passage_id": "hr-leave-p3",
+      "locator_id": "markdown:leave-policy#annual-leave-carry-over",
       "path": "documents/leave-policy.md"
     },
     {
       "document_id": "security-incident",
       "passage_id": "security-codes-p8",
+      "locator_id": "markdown:security-incident#incident-code-sec-417",
       "path": "documents/security-incident.md"
     },
     {
       "document_id": "asset-approval",
       "passage_id": "finance-assets-p12",
+      "locator_id": "markdown:asset-approval#high-value-equipment-approval",
       "path": "documents/asset-approval.md"
     },
     {
       "document_id": "temporary-access",
       "passage_id": "security-access-p14-15",
+      "locator_id": "markdown:temporary-access#temporary-administrator-access",
       "path": "documents/temporary-access.md"
     }
   ],

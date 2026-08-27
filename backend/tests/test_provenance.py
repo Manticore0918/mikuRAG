@@ -57,6 +57,7 @@ def test_chunks_receive_only_retrieval_relevant_non_secret_provenance() -> None:
         source_metadata={
             "title": "Worker",
             "repository": "mikuRAG",
+            "locator_id": "code:worker.py#restore",
             "passage_id": "worker-restore-p1",
             "owner_email": "private@example.test",
             "internal_notes": {"queue": "critical"},
@@ -67,6 +68,7 @@ def test_chunks_receive_only_retrieval_relevant_non_secret_provenance() -> None:
 
     assert provenance["source_title"] == "Worker"
     assert provenance["source_repository"] == "mikuRAG"
+    assert provenance["source_locator_id"] == "code:worker.py#restore"
     assert provenance["source_passage_id"] == "worker-restore-p1"
     assert "owner_email" not in provenance
     assert "internal_notes" not in provenance

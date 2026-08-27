@@ -57,9 +57,12 @@ before returning a non-zero exit code.
 
 ## Corpus schema
 
-`manifest.json` schema version 1 contains Documents and cases. Each Document has
-a stable `document_id`, stable `passage_id`, and a corpus-relative source path.
-Cases identify relevant and required passage IDs. The runner copies `passage_id`
-into the non-secret chunk provenance allowlist as `source_passage_id`, so scores
-come from the actual retrieved chunks rather than filenames or hand-authored
-observations.
+`manifest.json` schema version 1 contains redistribution metadata, Documents,
+and cases. The corpus must declare its license/provenance, reference a non-empty
+license file, and explicitly declare that it contains no sensitive data. Each
+Document has a stable lowercase `document_id`, `passage_id`, `locator_id`, and a
+corpus-relative source path. Cases identify relevant and required passage IDs.
+The runner copies the passage and locator IDs into the non-secret chunk
+provenance allowlist as `source_passage_id` and `source_locator_id`, so raw run
+records can address the exact gold passage and source locator independently of
+database UUIDs, filenames, or hand-authored observations.

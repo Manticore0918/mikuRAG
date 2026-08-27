@@ -43,6 +43,7 @@ class EvaluationDocumentRecord:
 class EvaluationEvidenceRecord:
     rank: int
     passage_id: str
+    locator_id: str
     document_id: str
     document_name: str
     chunk_id: str

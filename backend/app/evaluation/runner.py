@@ -184,6 +184,7 @@ class DatabaseEvaluationRuntime:
                         ),
                         source_metadata={
                             "passage_id": corpus_document.passage_id,
+                            "locator_id": corpus_document.locator_id,
                             "version": dataset.version,
                         },
                         ingestion_stage="queued",
@@ -522,6 +523,7 @@ def _evidence_record(evidence: Evidence) -> EvaluationEvidenceRecord:
     return EvaluationEvidenceRecord(
         rank=evidence.retrieval_rank,
         passage_id=_passage_id(evidence),
+        locator_id=_locator_id(evidence),
         document_id=str(evidence.document_id),
         document_name=evidence.document_name,
         chunk_id=str(evidence.chunk_id),
@@ -538,6 +540,15 @@ def _passage_id(evidence: Evidence) -> str:
     if not isinstance(value, str) or not value:
         raise EvaluationRuntimeError(
             f"Retrieved evaluation chunk {evidence.chunk_id} has no stable passage ID"
+        )
+    return value
+
+
+def _locator_id(evidence: Evidence) -> str:
+    value = evidence.locator.get("source_locator_id")
+    if not isinstance(value, str) or not value:
+        raise EvaluationRuntimeError(
+            f"Retrieved evaluation chunk {evidence.chunk_id} has no stable locator ID"
         )
     return value
 

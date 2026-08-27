@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,11 +10,14 @@ from app.ingestion.storage import (
     validate_file_format,
 )
 
+_STABLE_ID = re.compile(r"^[a-z0-9][a-z0-9._:/#_-]{2,127}$")
+
 
 @dataclass(frozen=True)
 class EvaluationCorpusDocument:
     document_id: str
     passage_id: str
+    locator_id: str
     path: Path
     relative_path: str
     original_name: str
@@ -41,6 +45,9 @@ class ExecutableEvaluationDataset:
     schema_version: int
     version: str
     description: str
+    license_id: str
+    provenance: str
+    contains_sensitive_data: bool
     manifest_path: Path
     documents: tuple[EvaluationCorpusDocument, ...]
     cases: tuple[ExecutableEvaluationCase, ...]
@@ -54,6 +61,20 @@ def load_executable_dataset(path: Path) -> ExecutableEvaluationDataset:
     version = _required_string(payload, "version", "evaluation corpus")
     description = str(payload.get("description") or "").strip()
     root = manifest_path.parent
+    license_id = _required_string(payload, "license", "evaluation corpus")
+    provenance = _required_string(payload, "provenance", "evaluation corpus")
+    contains_sensitive_data = payload.get("contains_sensitive_data")
+    if contains_sensitive_data is not False:
+        raise ValueError(
+            "Executable evaluation corpora must declare contains_sensitive_data false"
+        )
+    license_file = _corpus_file(
+        root,
+        _required_string(payload, "license_file", "evaluation corpus"),
+        owner="Evaluation corpus license",
+    )
+    if not license_file.read_text(encoding="utf-8").strip():
+        raise ValueError("The evaluation corpus license file cannot be empty")
 
     raw_documents = payload.get("documents")
     if not isinstance(raw_documents, list) or not raw_documents:
@@ -61,6 +82,7 @@ def load_executable_dataset(path: Path) -> ExecutableEvaluationDataset:
     documents = tuple(_load_document(root, item) for item in raw_documents)
     _require_unique((item.document_id for item in documents), "Document IDs")
     _require_unique((item.passage_id for item in documents), "passage IDs")
+    _require_unique((item.locator_id for item in documents), "locator IDs")
     _require_unique((item.sha256 for item in documents), "Document contents")
 
     raw_cases = payload.get("cases")
@@ -88,6 +110,9 @@ def load_executable_dataset(path: Path) -> ExecutableEvaluationDataset:
         schema_version=1,
         version=version,
         description=description,
+        license_id=license_id,
+        provenance=provenance,
+        contains_sensitive_data=contains_sensitive_data,
         manifest_path=manifest_path,
         documents=documents,
         cases=cases,
@@ -97,21 +122,19 @@ def load_executable_dataset(path: Path) -> ExecutableEvaluationDataset:
 def _load_document(root: Path, raw: object) -> EvaluationCorpusDocument:
     if not isinstance(raw, dict):
         raise ValueError("Evaluation corpus documents must be objects")
-    document_id = _required_string(raw, "document_id", "evaluation corpus Document")
-    passage_id = _required_string(raw, "passage_id", f"Document '{document_id}'")
+    document_id = _stable_id(raw, "document_id", "evaluation corpus Document")
+    passage_id = _stable_id(raw, "passage_id", f"Document '{document_id}'")
+    locator_id = _stable_id(raw, "locator_id", f"Document '{document_id}'")
     relative_text = _required_string(raw, "path", f"Document '{document_id}'")
+    source_path = _corpus_file(root, relative_text, owner=f"Document '{document_id}'")
     relative = Path(relative_text)
-    if relative.is_absolute() or ".." in relative.parts:
-        raise ValueError(f"Document '{document_id}' path must stay inside the corpus")
-    source_path = (root / relative).resolve()
-    if not source_path.is_relative_to(root) or not source_path.is_file():
-        raise ValueError(f"Document '{document_id}' source file is missing")
     suffix = source_path.suffix.casefold()
     media_type = validate_file_format(source_path, suffix)
     content = source_path.read_bytes()
     return EvaluationCorpusDocument(
         document_id=document_id,
         passage_id=passage_id,
+        locator_id=locator_id,
         path=source_path,
         relative_path=relative.as_posix(),
         original_name=str(raw.get("original_name") or source_path.name),
@@ -126,7 +149,7 @@ def _load_document(root: Path, raw: object) -> EvaluationCorpusDocument:
 def _load_case(raw: object) -> ExecutableEvaluationCase:
     if not isinstance(raw, dict):
         raise ValueError("Executable evaluation cases must be objects")
-    case_id = _required_string(raw, "case_id", "evaluation case")
+    case_id = _stable_id(raw, "case_id", "evaluation case")
     category = _required_string(raw, "category", f"case '{case_id}'")
     query = _required_string(raw, "query", f"case '{case_id}'")
     relevant = _string_tuple(raw.get("relevant_passage_ids"), "relevant_passage_ids")
@@ -159,6 +182,25 @@ def _required_string(payload: dict[str, object], key: str, owner: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"The {owner} requires {key}")
     return value.strip()
+
+
+def _stable_id(payload: dict[str, object], key: str, owner: str) -> str:
+    value = _required_string(payload, key, owner)
+    if not _STABLE_ID.fullmatch(value):
+        raise ValueError(
+            f"The {owner} {key} must be a stable lowercase identifier"
+        )
+    return value
+
+
+def _corpus_file(root: Path, relative_text: str, *, owner: str) -> Path:
+    relative = Path(relative_text)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"{owner} path must stay inside the corpus")
+    source_path = (root / relative).resolve()
+    if not source_path.is_relative_to(root) or not source_path.is_file():
+        raise ValueError(f"{owner} source file is missing")
+    return source_path
 
 
 def _string_tuple(value: object, field_name: str) -> tuple[str, ...]:
