@@ -11,10 +11,14 @@ COPY evaluation ./evaluation
 COPY alembic.ini ./
 COPY migrations ./migrations
 
-# The production image includes the optional local reranker so selecting
-# MIKURAG_RERANKER_PROVIDER=cross_encoder never degrades merely because the
-# package was omitted at build time. The model itself remains lazy-loaded.
-RUN pip install --no-cache-dir ".[rerank]"
+# The reranker is CPU-bound in this image. Install PyTorch from its CPU wheel
+# index first so pip cannot silently pull multi-gigabyte CUDA runtime packages.
+# The model itself remains lazy-loaded on first use.
+ARG PYTORCH_VERSION=2.12.1
+RUN pip install --no-cache-dir \
+        --index-url https://download.pytorch.org/whl/cpu \
+        "torch==${PYTORCH_VERSION}" \
+    && pip install --no-cache-dir ".[rerank]"
 
 RUN useradd --create-home --uid 10001 mikurag \
     && mkdir -p /data/uploads \
