@@ -123,9 +123,9 @@ npm run build
 
 ## Executable evaluation
 
-The versioned `executable_v1` corpus can be ingested into a unique, isolated
-Knowledge Base and queried through the production embedding and hybrid retrieval
-path:
+The reviewed `gold_v1` corpus (64 questions across train/dev/test splits with
+graded qrels) is ingested into a unique, isolated Knowledge Base and queried
+through the production embedding and hybrid retrieval path:
 
 ```powershell
 .\scripts\mikurag.ps1 evaluate
@@ -133,9 +133,15 @@ path:
 
 The runner waits for real Celery Ingestion, writes `raw-run.json`, `report.json`,
 and `report.md` under `backend/evaluation/results/`, then deletes its Knowledge
-Base and managed source files. Add `--answers` to the direct evaluation CLI to
-also execute grounded generation and validation. See
-[`docs/EVALUATION-RUNNER.md`](./docs/EVALUATION-RUNNER.md) for the lifecycle,
+Base and managed source files. The evaluation CLI exposes two subcommands:
+
+- `run` — execute one configuration (`--chunking-version`, `--answers`,
+  `--max-cases` for a CI smoke subset).
+- `compare` — run every chunking profile against the same corpus and produce
+  Recall/MRR/NDCG, latency, token, and storage results with a per-candidate
+  acceptance gate on the untouched test split.
+
+See [`docs/EVALUATION-RUNNER.md`](./docs/EVALUATION-RUNNER.md) for the lifecycle,
 corpus schema, failure behavior, and artifact contract.
 
 ## Reproducible baseline demo

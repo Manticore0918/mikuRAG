@@ -1,0 +1,2231 @@
+{
+  "schema_version": 2,
+  "version": "gold_v1",
+  "description": "Redistributable gold evaluation set: 64 reviewed questions over heterogeneous synthetic Markdown, HTML, PDF, Python, and TypeScript sources. Includes unsupported and genuinely conflicting-evidence cases.",
+  "license": "CC0-1.0",
+  "license_file": "LICENSE.txt",
+  "provenance": "synthetic",
+  "contains_sensitive_data": false,
+  "review_status": "reviewed",
+  "headline_eligible": false,
+  "documents": [
+    {
+      "document_id": "ops-catalog",
+      "path": "documents/operations-catalog.md",
+      "tags": [
+        "operations"
+      ],
+      "passages": [
+        {
+          "passage_id": "ops-service-registry",
+          "locator_id": "markdown:ops-catalog#ops-service-registry",
+          "locator_match": {
+            "heading_path": [
+              "Operations catalog",
+              "Service registry"
+            ]
+          }
+        },
+        {
+          "passage_id": "ops-qpx731",
+          "locator_id": "markdown:ops-catalog#ops-qpx731",
+          "locator_match": {
+            "heading_path": [
+              "Operations catalog",
+              "Queue poison error"
+            ]
+          }
+        },
+        {
+          "passage_id": "ops-release-windows",
+          "locator_id": "markdown:ops-catalog#ops-release-windows",
+          "locator_match": {
+            "heading_path": [
+              "Operations catalog",
+              "Release windows"
+            ]
+          }
+        },
+        {
+          "passage_id": "ops-p1-escalation",
+          "locator_id": "markdown:ops-catalog#ops-p1-escalation",
+          "locator_match": {
+            "heading_path": [
+              "Operations catalog",
+              "Priority-one escalation"
+            ]
+          }
+        },
+        {
+          "passage_id": "ops-batch-ledger",
+          "locator_id": "markdown:ops-catalog#ops-batch-ledger",
+          "locator_match": {
+            "heading_path": [
+              "Operations catalog",
+              "Batch ledger"
+            ]
+          }
+        },
+        {
+          "passage_id": "ops-status-probes",
+          "locator_id": "markdown:ops-catalog#ops-status-probes",
+          "locator_match": {
+            "heading_path": [
+              "Operations catalog",
+              "Status probes"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "people-policy",
+      "path": "documents/people-policy.md",
+      "tags": [
+        "policy",
+        "hr"
+      ],
+      "passages": [
+        {
+          "passage_id": "hr-leave-carryover",
+          "locator_id": "markdown:people-policy#hr-leave-carryover",
+          "locator_match": {
+            "heading_path": [
+              "People policy",
+              "Annual leave carry-over"
+            ]
+          }
+        },
+        {
+          "passage_id": "hr-remote-equipment",
+          "locator_id": "markdown:people-policy#hr-remote-equipment",
+          "locator_match": {
+            "heading_path": [
+              "People policy",
+              "Remote equipment"
+            ]
+          }
+        },
+        {
+          "passage_id": "hr-new-starter",
+          "locator_id": "markdown:people-policy#hr-new-starter",
+          "locator_match": {
+            "heading_path": [
+              "People policy",
+              "New starter sequence"
+            ]
+          }
+        },
+        {
+          "passage_id": "hr-learning-allowance",
+          "locator_id": "markdown:people-policy#hr-learning-allowance",
+          "locator_match": {
+            "heading_path": [
+              "People policy",
+              "Learning allowance"
+            ]
+          }
+        },
+        {
+          "passage_id": "hr-contractor-access",
+          "locator_id": "markdown:people-policy#hr-contractor-access",
+          "locator_match": {
+            "heading_path": [
+              "People policy",
+              "Contractor access"
+            ]
+          }
+        },
+        {
+          "passage_id": "hr-expense-submission",
+          "locator_id": "markdown:people-policy#hr-expense-submission",
+          "locator_match": {
+            "heading_path": [
+              "People policy",
+              "Expense submission"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "retention-current",
+      "path": "documents/retention-current.md",
+      "tags": [
+        "records",
+        "policy"
+      ],
+      "passages": [
+        {
+          "passage_id": "ret-current-audit",
+          "locator_id": "markdown:retention-current#ret-current-audit",
+          "locator_match": {
+            "heading_path": [
+              "Current records schedule",
+              "Customer audit events"
+            ]
+          }
+        },
+        {
+          "passage_id": "ret-current-billing",
+          "locator_id": "markdown:retention-current#ret-current-billing",
+          "locator_match": {
+            "heading_path": [
+              "Current records schedule",
+              "Billing exports"
+            ]
+          }
+        },
+        {
+          "passage_id": "ret-current-deletion",
+          "locator_id": "markdown:retention-current#ret-current-deletion",
+          "locator_match": {
+            "heading_path": [
+              "Current records schedule",
+              "Deletion queue"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "retention-legacy",
+      "path": "documents/retention-legacy.md",
+      "tags": [
+        "records",
+        "policy"
+      ],
+      "passages": [
+        {
+          "passage_id": "ret-legacy-audit",
+          "locator_id": "markdown:retention-legacy#ret-legacy-audit",
+          "locator_match": {
+            "heading_path": [
+              "Superseded records schedule",
+              "Customer audit events"
+            ]
+          }
+        },
+        {
+          "passage_id": "ret-legacy-billing",
+          "locator_id": "markdown:retention-legacy#ret-legacy-billing",
+          "locator_match": {
+            "heading_path": [
+              "Superseded records schedule",
+              "Billing exports"
+            ]
+          }
+        },
+        {
+          "passage_id": "ret-legacy-deletion",
+          "locator_id": "markdown:retention-legacy#ret-legacy-deletion",
+          "locator_match": {
+            "heading_path": [
+              "Superseded records schedule",
+              "Deletion queue"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "security-standard",
+      "path": "documents/security-standard.md",
+      "tags": [
+        "policy",
+        "security"
+      ],
+      "passages": [
+        {
+          "passage_id": "sec-session",
+          "locator_id": "markdown:security-standard#sec-session",
+          "locator_match": {
+            "heading_path": [
+              "Security standard",
+              "Session controls"
+            ]
+          }
+        },
+        {
+          "passage_id": "sec-417",
+          "locator_id": "markdown:security-standard#sec-417",
+          "locator_match": {
+            "heading_path": [
+              "Security standard",
+              "Incident code SEC-417"
+            ]
+          }
+        },
+        {
+          "passage_id": "sec-backup-encryption",
+          "locator_id": "markdown:security-standard#sec-backup-encryption",
+          "locator_match": {
+            "heading_path": [
+              "Security standard",
+              "Backup encryption"
+            ]
+          }
+        },
+        {
+          "passage_id": "sec-breakglass",
+          "locator_id": "markdown:security-standard#sec-breakglass",
+          "locator_match": {
+            "heading_path": [
+              "Security standard",
+              "Break-glass access"
+            ]
+          }
+        },
+        {
+          "passage_id": "sec-log-retention",
+          "locator_id": "markdown:security-standard#sec-log-retention",
+          "locator_match": {
+            "heading_path": [
+              "Security standard",
+              "Security log retention"
+            ]
+          }
+        },
+        {
+          "passage_id": "sec-phishing",
+          "locator_id": "markdown:security-standard#sec-phishing",
+          "locator_match": {
+            "heading_path": [
+              "Security standard",
+              "Phishing reports"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "support-eu",
+      "path": "documents/support-eu.md",
+      "tags": [
+        "operations",
+        "support"
+      ],
+      "passages": [
+        {
+          "passage_id": "eu-service-hours",
+          "locator_id": "markdown:support-eu#eu-service-hours",
+          "locator_match": {
+            "heading_path": [
+              "Europe support",
+              "Service hours"
+            ]
+          }
+        },
+        {
+          "passage_id": "eu-urgent-route",
+          "locator_id": "markdown:support-eu#eu-urgent-route",
+          "locator_match": {
+            "heading_path": [
+              "Europe support",
+              "Urgent route"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "support-sg",
+      "path": "documents/support-sg.md",
+      "tags": [
+        "operations",
+        "support"
+      ],
+      "passages": [
+        {
+          "passage_id": "sg-service-hours",
+          "locator_id": "markdown:support-sg#sg-service-hours",
+          "locator_match": {
+            "heading_path": [
+              "Singapore support",
+              "Service hours"
+            ]
+          }
+        },
+        {
+          "passage_id": "sg-urgent-route",
+          "locator_id": "markdown:support-sg#sg-urgent-route",
+          "locator_match": {
+            "heading_path": [
+              "Singapore support",
+              "Urgent route"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "travel-contractors",
+      "path": "documents/travel-contractors.md",
+      "tags": [
+        "policy",
+        "travel"
+      ],
+      "passages": [
+        {
+          "passage_id": "trv-contractor-approval",
+          "locator_id": "markdown:travel-contractors#trv-contractor-approval",
+          "locator_match": {
+            "heading_path": [
+              "Contractor travel policy",
+              "Trip approval"
+            ]
+          }
+        },
+        {
+          "passage_id": "trv-contractor-lodging",
+          "locator_id": "markdown:travel-contractors#trv-contractor-lodging",
+          "locator_match": {
+            "heading_path": [
+              "Contractor travel policy",
+              "Lodging cap"
+            ]
+          }
+        },
+        {
+          "passage_id": "trv-contractor-deadline",
+          "locator_id": "markdown:travel-contractors#trv-contractor-deadline",
+          "locator_match": {
+            "heading_path": [
+              "Contractor travel policy",
+              "Expense deadline"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "travel-employees",
+      "path": "documents/travel-employees.md",
+      "tags": [
+        "policy",
+        "travel"
+      ],
+      "passages": [
+        {
+          "passage_id": "trv-employee-domestic",
+          "locator_id": "markdown:travel-employees#trv-employee-domestic",
+          "locator_match": {
+            "heading_path": [
+              "Employee travel policy",
+              "Domestic approval"
+            ]
+          }
+        },
+        {
+          "passage_id": "trv-employee-international",
+          "locator_id": "markdown:travel-employees#trv-employee-international",
+          "locator_match": {
+            "heading_path": [
+              "Employee travel policy",
+              "International approval"
+            ]
+          }
+        },
+        {
+          "passage_id": "trv-employee-ground",
+          "locator_id": "markdown:travel-employees#trv-employee-ground",
+          "locator_match": {
+            "heading_path": [
+              "Employee travel policy",
+              "Ground transport"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "contractor-faq",
+      "path": "documents/contractor-faq.md",
+      "tags": [
+        "policy",
+        "travel"
+      ],
+      "passages": [
+        {
+          "passage_id": "faq-remote-equipment",
+          "locator_id": "markdown:contractor-faq#faq-remote-equipment",
+          "locator_match": {
+            "heading_path": [
+              "Contractor travel FAQ",
+              "Remote equipment"
+            ]
+          }
+        },
+        {
+          "passage_id": "faq-lodging-cap",
+          "locator_id": "markdown:contractor-faq#faq-lodging-cap",
+          "locator_match": {
+            "heading_path": [
+              "Contractor travel FAQ",
+              "Lodging cap"
+            ]
+          }
+        },
+        {
+          "passage_id": "faq-trip-approval",
+          "locator_id": "markdown:contractor-faq#faq-trip-approval",
+          "locator_match": {
+            "heading_path": [
+              "Contractor travel FAQ",
+              "Trip approval"
+            ]
+          }
+        },
+        {
+          "passage_id": "faq-expense-deadline",
+          "locator_id": "markdown:contractor-faq#faq-expense-deadline",
+          "locator_match": {
+            "heading_path": [
+              "Contractor travel FAQ",
+              "Expense deadline"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "scheduler",
+      "path": "documents/scheduler.py",
+      "tags": [
+        "code",
+        "python"
+      ],
+      "passages": [
+        {
+          "passage_id": "scheduler-compute-backoff",
+          "locator_id": "code:scheduler#scheduler-compute-backoff",
+          "locator_match": {
+            "symbol": "compute_backoff"
+          }
+        },
+        {
+          "passage_id": "scheduler-should-retry",
+          "locator_id": "code:scheduler#scheduler-should-retry",
+          "locator_match": {
+            "symbol": "should_retry"
+          }
+        },
+        {
+          "passage_id": "scheduler-parse-window",
+          "locator_id": "code:scheduler#scheduler-parse-window",
+          "locator_match": {
+            "symbol": "parse_window"
+          }
+        },
+        {
+          "passage_id": "scheduler-lease-guard",
+          "locator_id": "code:scheduler#scheduler-lease-guard",
+          "locator_match": {
+            "symbol": "LeaseGuard"
+          }
+        },
+        {
+          "passage_id": "scheduler-normalize-job-id",
+          "locator_id": "code:scheduler#scheduler-normalize-job-id",
+          "locator_match": {
+            "symbol": "normalize_job_id"
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "throttle",
+      "path": "documents/throttle.ts",
+      "tags": [
+        "code",
+        "typescript"
+      ],
+      "passages": [
+        {
+          "passage_id": "throttle-normalize-key",
+          "locator_id": "code:throttle#throttle-normalize-key",
+          "locator_match": {
+            "symbol": "normalizeKey"
+          }
+        },
+        {
+          "passage_id": "throttle-token-bucket",
+          "locator_id": "code:throttle#throttle-token-bucket",
+          "locator_match": {
+            "symbol": "TokenBucket"
+          }
+        },
+        {
+          "passage_id": "throttle-retry-after-ms",
+          "locator_id": "code:throttle#throttle-retry-after-ms",
+          "locator_match": {
+            "symbol": "retryAfterMs"
+          }
+        },
+        {
+          "passage_id": "throttle-circuit-breaker",
+          "locator_id": "code:throttle#throttle-circuit-breaker",
+          "locator_match": {
+            "symbol": "CircuitBreaker"
+          }
+        },
+        {
+          "passage_id": "throttle-partition-for",
+          "locator_id": "code:throttle#throttle-partition-for",
+          "locator_match": {
+            "symbol": "partitionFor"
+          }
+        },
+        {
+          "passage_id": "throttle-partition-total",
+          "locator_id": "code:throttle#throttle-partition-total",
+          "locator_match": {
+            "symbol": "total"
+          }
+        }
+      ]
+    },
+    {
+      "document_id": "portal-guide",
+      "path": "documents/portal-guide.html",
+      "tags": [
+        "operations",
+        "portal"
+      ],
+      "passages": [
+        {
+          "passage_id": "portal-account-setup-li1",
+          "locator_id": "html:portal-guide#portal-account-setup-li1",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #account-setup > ul:nth-of-type(1) > li:nth-of-type(1)"
+          }
+        },
+        {
+          "passage_id": "portal-account-setup-li2",
+          "locator_id": "html:portal-guide#portal-account-setup-li2",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #account-setup > ul:nth-of-type(1) > li:nth-of-type(2)"
+          }
+        },
+        {
+          "passage_id": "portal-account-setup-li3",
+          "locator_id": "html:portal-guide#portal-account-setup-li3",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #account-setup > ul:nth-of-type(1) > li:nth-of-type(3)"
+          }
+        },
+        {
+          "passage_id": "portal-invoice-formats",
+          "locator_id": "html:portal-guide#portal-invoice-formats",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #invoice-export > p:nth-of-type(1)"
+          }
+        },
+        {
+          "passage_id": "portal-invoice-limit",
+          "locator_id": "html:portal-guide#portal-invoice-limit",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #invoice-export > p:nth-of-type(2)"
+          }
+        },
+        {
+          "passage_id": "portal-alert-p1",
+          "locator_id": "html:portal-guide#portal-alert-p1",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #alert-routing > ul:nth-of-type(1) > li:nth-of-type(1)"
+          }
+        },
+        {
+          "passage_id": "portal-alert-p2",
+          "locator_id": "html:portal-guide#portal-alert-p2",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #alert-routing > ul:nth-of-type(1) > li:nth-of-type(2)"
+          }
+        },
+        {
+          "passage_id": "portal-alert-p3",
+          "locator_id": "html:portal-guide#portal-alert-p3",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #alert-routing > ul:nth-of-type(1) > li:nth-of-type(3)"
+          }
+        },
+        {
+          "passage_id": "portal-search-syntax",
+          "locator_id": "html:portal-guide#portal-search-syntax",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #search-syntax > p:nth-of-type(1)"
+          }
+        },
+        {
+          "passage_id": "portal-shortcut-home",
+          "locator_id": "html:portal-guide#portal-shortcut-home",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #keyboard-shortcuts > ul:nth-of-type(1) > li:nth-of-type(1)"
+          }
+        },
+        {
+          "passage_id": "portal-shortcut-help",
+          "locator_id": "html:portal-guide#portal-shortcut-help",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #keyboard-shortcuts > ul:nth-of-type(1) > li:nth-of-type(2)"
+          }
+        },
+        {
+          "passage_id": "portal-status-badges",
+          "locator_id": "html:portal-guide#portal-status-badges",
+          "locator_match": {
+            "element": "html:nth-of-type(1) > body:nth-of-type(1) > main:nth-of-type(1) > #status-badges > p:nth-of-type(1)"
+          }
+        }
+      ],
+      "source_uri": "https://docs.example.invalid/portal/operations"
+    },
+    {
+      "document_id": "resilience-handbook",
+      "path": "documents/resilience-handbook.pdf",
+      "tags": [
+        "operations",
+        "resilience"
+      ],
+      "passages": [
+        {
+          "passage_id": "resilience-p1",
+          "locator_id": "pdf:resilience-handbook#resilience-p1",
+          "locator_match": {
+            "page": 1
+          }
+        },
+        {
+          "passage_id": "resilience-p2",
+          "locator_id": "pdf:resilience-handbook#resilience-p2",
+          "locator_match": {
+            "page": 2
+          }
+        },
+        {
+          "passage_id": "resilience-p3",
+          "locator_id": "pdf:resilience-handbook#resilience-p3",
+          "locator_match": {
+            "page": 3
+          }
+        },
+        {
+          "passage_id": "resilience-p4",
+          "locator_id": "pdf:resilience-handbook#resilience-p4",
+          "locator_match": {
+            "page": 4
+          }
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "e-svc1042",
+      "category": "exact_identifier",
+      "query": "What is the service identifier of the Atlas gateway?",
+      "relevant_passage_ids": [
+        "ops-service-registry"
+      ],
+      "required_passage_ids": [
+        "ops-service-registry"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "SVC-1042"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "ops-service-registry": 3
+      }
+    },
+    {
+      "case_id": "e-qpx731",
+      "category": "exact_identifier",
+      "query": "What does error code QPX-731 mean?",
+      "relevant_passage_ids": [
+        "ops-qpx731"
+      ],
+      "required_passage_ids": [
+        "ops-qpx731"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "QPX-731",
+        "quarantine"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "ops-qpx731": 3
+      }
+    },
+    {
+      "case_id": "e-fin882",
+      "category": "exact_identifier",
+      "query": "What is the identifier of the finance reconciliation job?",
+      "relevant_passage_ids": [
+        "ops-batch-ledger"
+      ],
+      "required_passage_ids": [
+        "ops-batch-ledger"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "FIN-882"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "ops-batch-ledger": 3
+      }
+    },
+    {
+      "case_id": "e-sec417",
+      "category": "exact_identifier",
+      "query": "Which incident code requires rotating affected service credentials within thirty minutes?",
+      "relevant_passage_ids": [
+        "sec-417"
+      ],
+      "required_passage_ids": [
+        "sec-417"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "SEC-417",
+        "thirty minutes"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "sec-417": 3
+      }
+    },
+    {
+      "case_id": "e-eu7",
+      "category": "exact_identifier",
+      "query": "What is the route code for urgent Europe support requests?",
+      "relevant_passage_ids": [
+        "eu-urgent-route"
+      ],
+      "required_passage_ids": [
+        "eu-urgent-route"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "EU-7"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "eu-urgent-route": 3
+      }
+    },
+    {
+      "case_id": "e-sg2",
+      "category": "exact_identifier",
+      "query": "What is the route code for urgent Singapore support requests?",
+      "relevant_passage_ids": [
+        "sg-urgent-route"
+      ],
+      "required_passage_ids": [
+        "sg-urgent-route"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "SG-2"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "sg-urgent-route": 3
+      }
+    },
+    {
+      "case_id": "e-learning-sgd",
+      "category": "exact_identifier",
+      "query": "What is the annual employee learning allowance?",
+      "relevant_passage_ids": [
+        "hr-learning-allowance"
+      ],
+      "required_passage_ids": [
+        "hr-learning-allowance"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "SGD 1,200"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "hr-learning-allowance": 3
+      }
+    },
+    {
+      "case_id": "e-remote-threshold",
+      "category": "exact_identifier",
+      "query": "Above what purchase price does remote-work equipment require approval?",
+      "relevant_passage_ids": [
+        "hr-remote-equipment"
+      ],
+      "required_passage_ids": [
+        "hr-remote-equipment"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "SGD 1,800"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "hr-remote-equipment": 3
+      }
+    },
+    {
+      "case_id": "s-equipment-signoff",
+      "category": "semantic_paraphrase",
+      "query": "Who has to give the green light before an employee buys pricey work-from-home gear?",
+      "relevant_passage_ids": [
+        "hr-remote-equipment"
+      ],
+      "required_passage_ids": [
+        "hr-remote-equipment"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "department head",
+        "Information Technology"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "hr-remote-equipment": 3
+      }
+    },
+    {
+      "case_id": "s-idle-lock",
+      "category": "semantic_paraphrase",
+      "query": "If an administrator steps away from the keyboard, when does the session get locked?",
+      "relevant_passage_ids": [
+        "sec-session"
+      ],
+      "required_passage_ids": [
+        "sec-session"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "twenty minutes"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "sec-session": 3
+      }
+    },
+    {
+      "case_id": "s-phish-act",
+      "category": "semantic_paraphrase",
+      "query": "Someone suspects an email is phishing. How quickly must they act and with which action?",
+      "relevant_passage_ids": [
+        "sec-phishing"
+      ],
+      "required_passage_ids": [
+        "sec-phishing"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "fifteen minutes",
+        "Report Phishing"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "sec-phishing": 3
+      }
+    },
+    {
+      "case_id": "s-leave-rollover",
+      "category": "semantic_paraphrase",
+      "query": "What happens to unused annual leave above the carry-over cap?",
+      "relevant_passage_ids": [
+        "hr-leave-carryover"
+      ],
+      "required_passage_ids": [
+        "hr-leave-carryover"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "five days",
+        "31 December"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "hr-leave-carryover": 3
+      }
+    },
+    {
+      "case_id": "s-release-freeze",
+      "category": "semantic_paraphrase",
+      "query": "A team wants a routine release shortly before a quarter ends. What must happen first?",
+      "relevant_passage_ids": [
+        "ops-release-windows"
+      ],
+      "required_passage_ids": [
+        "ops-release-windows"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "five business days",
+        "freeze"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "ops-release-windows": 3
+      }
+    },
+    {
+      "case_id": "s-forward-phish",
+      "category": "semantic_paraphrase",
+      "query": "Is forwarding a suspected phishing email to a colleague for review acceptable?",
+      "relevant_passage_ids": [
+        "sec-phishing"
+      ],
+      "required_passage_ids": [
+        "sec-phishing"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "prohibited"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "sec-phishing": 3
+      }
+    },
+    {
+      "case_id": "s-qpx-operator",
+      "category": "semantic_paraphrase",
+      "query": "What must an operator do with a message flagged by error code QPX-731?",
+      "relevant_passage_ids": [
+        "ops-qpx731"
+      ],
+      "required_passage_ids": [
+        "ops-qpx731"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "quarantine",
+        "SHA-256"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "ops-qpx731": 3
+      }
+    },
+    {
+      "case_id": "xp-rpo-approvers",
+      "category": "cross_page",
+      "query": "What is the recovery point objective, and which two people must approve the replica promotion?",
+      "relevant_passage_ids": [
+        "resilience-p2",
+        "resilience-p3"
+      ],
+      "required_passage_ids": [
+        "resilience-p2",
+        "resilience-p3"
+      ],
+      "expected_citation_pages": [
+        2,
+        3
+      ],
+      "expected_answer_terms": [
+        "ten minutes",
+        "Reliability",
+        "product lead"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "resilience-p2": 3,
+        "resilience-p3": 3
+      }
+    },
+    {
+      "case_id": "xp-scope-rto",
+      "category": "cross_page",
+      "query": "Which services are in scope, and what is the recovery time objective?",
+      "relevant_passage_ids": [
+        "resilience-p1",
+        "resilience-p2"
+      ],
+      "required_passage_ids": [
+        "resilience-p1",
+        "resilience-p2"
+      ],
+      "expected_citation_pages": [
+        1,
+        2
+      ],
+      "expected_answer_terms": [
+        "authentication",
+        "checkout",
+        "recovery time objective"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "resilience-p1": 3,
+        "resilience-p2": 3
+      }
+    },
+    {
+      "case_id": "xp-integrity-freeze",
+      "category": "cross_page",
+      "query": "Who validates checkout integrity before traffic returns, and what is the first failover action?",
+      "relevant_passage_ids": [
+        "resilience-p1",
+        "resilience-p3"
+      ],
+      "required_passage_ids": [
+        "resilience-p1",
+        "resilience-p3"
+      ],
+      "expected_citation_pages": [
+        1,
+        3
+      ],
+      "expected_answer_terms": [
+        "Commerce lead",
+        "freeze writes"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "resilience-p1": 3,
+        "resilience-p3": 3
+      }
+    },
+    {
+      "case_id": "xp-rpo-corrective",
+      "category": "cross_page",
+      "query": "What is the recovery point objective, and how quickly must corrective actions be assigned after an exercise?",
+      "relevant_passage_ids": [
+        "resilience-p2",
+        "resilience-p4"
+      ],
+      "required_passage_ids": [
+        "resilience-p2",
+        "resilience-p4"
+      ],
+      "expected_citation_pages": [
+        2,
+        4
+      ],
+      "expected_answer_terms": [
+        "ten minutes",
+        "ten business days"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "resilience-p2": 3,
+        "resilience-p4": 3
+      }
+    },
+    {
+      "case_id": "xp-scope-exercise",
+      "category": "cross_page",
+      "query": "Which services does the handbook cover, and how often is a recovery exercise run?",
+      "relevant_passage_ids": [
+        "resilience-p1",
+        "resilience-p4"
+      ],
+      "required_passage_ids": [
+        "resilience-p1",
+        "resilience-p4"
+      ],
+      "expected_citation_pages": [
+        1,
+        4
+      ],
+      "expected_answer_terms": [
+        "authentication",
+        "checkout",
+        "quarter"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "resilience-p1": 3,
+        "resilience-p4": 3
+      }
+    },
+    {
+      "case_id": "xp-approvers-evidence",
+      "category": "cross_page",
+      "query": "Who must confirm the replica promotion, and when must exercise evidence be archived?",
+      "relevant_passage_ids": [
+        "resilience-p3",
+        "resilience-p4"
+      ],
+      "required_passage_ids": [
+        "resilience-p3",
+        "resilience-p4"
+      ],
+      "expected_citation_pages": [
+        3,
+        4
+      ],
+      "expected_answer_terms": [
+        "Reliability",
+        "thirty days"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "resilience-p3": 3,
+        "resilience-p4": 3
+      }
+    },
+    {
+      "case_id": "ms-417-backup",
+      "category": "multi_section",
+      "query": "Which incident code requires revoking sessions, and how often must backup encryption keys rotate?",
+      "relevant_passage_ids": [
+        "sec-417",
+        "sec-backup-encryption"
+      ],
+      "required_passage_ids": [
+        "sec-417",
+        "sec-backup-encryption"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "SEC-417",
+        "quarter"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "sec-417": 3,
+        "sec-backup-encryption": 3
+      }
+    },
+    {
+      "case_id": "ms-equipment-learning",
+      "category": "multi_section",
+      "query": "What approval does remote equipment need, and what is the annual learning allowance?",
+      "relevant_passage_ids": [
+        "hr-remote-equipment",
+        "hr-learning-allowance"
+      ],
+      "required_passage_ids": [
+        "hr-remote-equipment",
+        "hr-learning-allowance"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "department head",
+        "SGD 1,200"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "hr-remote-equipment": 3,
+        "hr-learning-allowance": 3
+      }
+    },
+    {
+      "case_id": "ms-svc-qpx",
+      "category": "multi_section",
+      "query": "What service identifier does the Atlas gateway use, and what does QPX-731 mean?",
+      "relevant_passage_ids": [
+        "ops-service-registry",
+        "ops-qpx731"
+      ],
+      "required_passage_ids": [
+        "ops-service-registry",
+        "ops-qpx731"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "SVC-1042",
+        "QPX-731"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "ops-service-registry": 3,
+        "ops-qpx731": 3
+      }
+    },
+    {
+      "case_id": "ms-domestic-flights",
+      "category": "multi_section",
+      "query": "What approval is needed for domestic employee travel above SGD 750, and how far ahead should international flights be booked?",
+      "relevant_passage_ids": [
+        "trv-employee-domestic",
+        "trv-employee-international"
+      ],
+      "required_passage_ids": [
+        "trv-employee-domestic",
+        "trv-employee-international"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "Finance",
+        "fourteen days"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "trv-employee-domestic": 3,
+        "trv-employee-international": 3
+      }
+    },
+    {
+      "case_id": "ms-logs-breakglass",
+      "category": "multi_section",
+      "query": "How long are security logs retained, and what is the break-glass access expiry?",
+      "relevant_passage_ids": [
+        "sec-log-retention",
+        "sec-breakglass"
+      ],
+      "required_passage_ids": [
+        "sec-log-retention",
+        "sec-breakglass"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "four hundred days",
+        "four hours"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "sec-log-retention": 3,
+        "sec-breakglass": 3
+      }
+    },
+    {
+      "case_id": "c-backoff-attempt6",
+      "category": "code_symbol",
+      "query": "What does compute_backoff return for attempt 6?",
+      "relevant_passage_ids": [
+        "scheduler-compute-backoff"
+      ],
+      "required_passage_ids": [
+        "scheduler-compute-backoff"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "120"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "scheduler-compute-backoff": 3
+      }
+    },
+    {
+      "case_id": "c-retry-codes",
+      "category": "code_symbol",
+      "query": "Which HTTP status codes does should_retry treat as retryable?",
+      "relevant_passage_ids": [
+        "scheduler-should-retry"
+      ],
+      "required_passage_ids": [
+        "scheduler-should-retry"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "408",
+        "429"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "scheduler-should-retry": 3
+      }
+    },
+    {
+      "case_id": "c-window-over6",
+      "category": "code_symbol",
+      "query": "What does parse_window raise for a maintenance window longer than six hours?",
+      "relevant_passage_ids": [
+        "scheduler-parse-window"
+      ],
+      "required_passage_ids": [
+        "scheduler-parse-window"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "six hours"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "scheduler-parse-window": 3
+      }
+    },
+    {
+      "case_id": "c-lease-renew",
+      "category": "code_symbol",
+      "query": "What happens when a non-owner calls renew on a LeaseGuard?",
+      "relevant_passage_ids": [
+        "scheduler-lease-guard"
+      ],
+      "required_passage_ids": [
+        "scheduler-lease-guard"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "PermissionError",
+        "lease owner"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "scheduler-lease-guard": 3
+      }
+    },
+    {
+      "case_id": "c-normalize-slashes",
+      "category": "code_symbol",
+      "query": "What does normalizeKey do with slashes in the input?",
+      "relevant_passage_ids": [
+        "throttle-normalize-key"
+      ],
+      "required_passage_ids": [
+        "throttle-normalize-key"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "toLowerCase",
+        "replaceAll"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "throttle-normalize-key": 3
+      }
+    },
+    {
+      "case_id": "c-bucket-empty",
+      "category": "code_symbol",
+      "query": "What does TokenBucket.consume return when fewer than one token is available?",
+      "relevant_passage_ids": [
+        "throttle-token-bucket"
+      ],
+      "required_passage_ids": [
+        "throttle-token-bucket"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "false"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "throttle-token-bucket": 3
+      }
+    },
+    {
+      "case_id": "c-breaker-threshold",
+      "category": "code_symbol",
+      "query": "After how many consecutive failures does CircuitBreaker open the circuit?",
+      "relevant_passage_ids": [
+        "throttle-circuit-breaker"
+      ],
+      "required_passage_ids": [
+        "throttle-circuit-breaker"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "5",
+        "30"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "throttle-circuit-breaker": 3
+      }
+    },
+    {
+      "case_id": "c-partition-zero",
+      "category": "code_symbol",
+      "query": "What does partitionFor do when shardCount is zero?",
+      "relevant_passage_ids": [
+        "throttle-partition-for"
+      ],
+      "required_passage_ids": [
+        "throttle-partition-for"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "shard count must be positive"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "throttle-partition-for": 3
+      }
+    },
+    {
+      "case_id": "h-invoice-rows",
+      "category": "html_heading_list",
+      "query": "What is the maximum number of rows in a single portal invoice export?",
+      "relevant_passage_ids": [
+        "portal-invoice-limit"
+      ],
+      "required_passage_ids": [
+        "portal-invoice-limit"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "25,000"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "portal-invoice-limit": 3
+      }
+    },
+    {
+      "case_id": "h-invoice-formats",
+      "category": "html_heading_list",
+      "query": "Which formats does the portal invoice export support?",
+      "relevant_passage_ids": [
+        "portal-invoice-formats"
+      ],
+      "required_passage_ids": [
+        "portal-invoice-formats"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "CSV",
+        "JSON"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "portal-invoice-formats": 3
+      }
+    },
+    {
+      "case_id": "h-alert-p1",
+      "category": "html_heading_list",
+      "query": "How are priority one portal alerts delivered?",
+      "relevant_passage_ids": [
+        "portal-alert-p1"
+      ],
+      "required_passage_ids": [
+        "portal-alert-p1"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "SMS",
+        "phone call"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "portal-alert-p1": 3
+      }
+    },
+    {
+      "case_id": "h-alert-email",
+      "category": "html_heading_list",
+      "query": "Which portal alert priorities are delivered by email?",
+      "relevant_passage_ids": [
+        "portal-alert-p2",
+        "portal-alert-p3"
+      ],
+      "required_passage_ids": [
+        "portal-alert-p2",
+        "portal-alert-p3"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "email"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "portal-alert-p2": 3,
+        "portal-alert-p3": 3
+      }
+    },
+    {
+      "case_id": "h-setup-checklist",
+      "category": "html_heading_list",
+      "query": "What are the three items on the portal account setup checklist?",
+      "relevant_passage_ids": [
+        "portal-account-setup-li1",
+        "portal-account-setup-li2",
+        "portal-account-setup-li3"
+      ],
+      "required_passage_ids": [
+        "portal-account-setup-li1",
+        "portal-account-setup-li2",
+        "portal-account-setup-li3"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "passkey",
+        "recovery codes"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "portal-account-setup-li1": 3,
+        "portal-account-setup-li2": 3,
+        "portal-account-setup-li3": 3
+      }
+    },
+    {
+      "case_id": "h-search-syntax",
+      "category": "html_heading_list",
+      "query": "How does the portal search for an exact phrase?",
+      "relevant_passage_ids": [
+        "portal-search-syntax"
+      ],
+      "required_passage_ids": [
+        "portal-search-syntax"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "quotation marks"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "portal-search-syntax": 3
+      }
+    },
+    {
+      "case_id": "h-shortcut-home",
+      "category": "html_heading_list",
+      "query": "What keyboard shortcut returns to the portal home page?",
+      "relevant_passage_ids": [
+        "portal-shortcut-home"
+      ],
+      "required_passage_ids": [
+        "portal-shortcut-home"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "g then h"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "portal-shortcut-home": 3
+      }
+    },
+    {
+      "case_id": "md-audit-windows",
+      "category": "multi_document",
+      "query": "How does the current records schedule change customer audit event retention compared with the superseded schedule?",
+      "relevant_passage_ids": [
+        "ret-current-audit",
+        "ret-legacy-audit"
+      ],
+      "required_passage_ids": [
+        "ret-current-audit",
+        "ret-legacy-audit"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "365 days",
+        "180 days"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "ret-current-audit": 3,
+        "ret-legacy-audit": 3
+      }
+    },
+    {
+      "case_id": "md-deletion-windows",
+      "category": "multi_document",
+      "query": "Compare the recovery queue windows for deletion requests under the current and superseded schedules.",
+      "relevant_passage_ids": [
+        "ret-current-deletion",
+        "ret-legacy-deletion"
+      ],
+      "required_passage_ids": [
+        "ret-current-deletion",
+        "ret-legacy-deletion"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "thirty days",
+        "sixty days"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "ret-current-deletion": 3,
+        "ret-legacy-deletion": 3
+      }
+    },
+    {
+      "case_id": "md-billing-windows",
+      "category": "multi_document",
+      "query": "How do billing export retention periods compare between the current and superseded schedules?",
+      "relevant_passage_ids": [
+        "ret-current-billing",
+        "ret-legacy-billing"
+      ],
+      "required_passage_ids": [
+        "ret-current-billing",
+        "ret-legacy-billing"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "seven years",
+        "five years"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "ret-current-billing": 3,
+        "ret-legacy-billing": 3
+      }
+    },
+    {
+      "case_id": "md-support-hours",
+      "category": "multi_document",
+      "query": "How do the Europe and Singapore support desks differ in service hours?",
+      "relevant_passage_ids": [
+        "eu-service-hours",
+        "sg-service-hours"
+      ],
+      "required_passage_ids": [
+        "eu-service-hours",
+        "sg-service-hours"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "Monday through Friday",
+        "Monday through Saturday"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "eu-service-hours": 3,
+        "sg-service-hours": 3
+      }
+    },
+    {
+      "case_id": "md-urgent-codes",
+      "category": "multi_document",
+      "query": "Which support region has the faster initial-response target, and what are the two route codes?",
+      "relevant_passage_ids": [
+        "eu-urgent-route",
+        "sg-urgent-route"
+      ],
+      "required_passage_ids": [
+        "eu-urgent-route",
+        "sg-urgent-route"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "EU-7",
+        "SG-2",
+        "twelve-minute"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "eu-urgent-route": 3,
+        "sg-urgent-route": 3
+      }
+    },
+    {
+      "case_id": "md-approval-employee",
+      "category": "multi_document",
+      "query": "How do approval rules differ between domestic and international employee travel?",
+      "relevant_passage_ids": [
+        "trv-employee-domestic",
+        "trv-employee-international"
+      ],
+      "required_passage_ids": [
+        "trv-employee-domestic",
+        "trv-employee-international"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "manager",
+        "regional director"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "trv-employee-domestic": 3,
+        "trv-employee-international": 3
+      }
+    },
+    {
+      "case_id": "md-access-grants",
+      "category": "multi_document",
+      "query": "How do contractor access grants compare with break-glass emergency access?",
+      "relevant_passage_ids": [
+        "hr-contractor-access",
+        "sec-breakglass"
+      ],
+      "required_passage_ids": [
+        "hr-contractor-access",
+        "sec-breakglass"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "eight hours",
+        "four hours"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "hr-contractor-access": 3,
+        "sec-breakglass": 3
+      }
+    },
+    {
+      "case_id": "m-billing-current",
+      "category": "metadata_filtered",
+      "query": "How long does the current records schedule keep billing exports?",
+      "relevant_passage_ids": [
+        "ret-current-billing"
+      ],
+      "required_passage_ids": [
+        "ret-current-billing"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "seven years"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "ret-current-billing": 3
+      },
+      "filters": {
+        "document_ids": [
+          "retention-current"
+        ]
+      }
+    },
+    {
+      "case_id": "m-deletion-current",
+      "category": "metadata_filtered",
+      "query": "How long do approved deletion requests remain recoverable under the current records schedule?",
+      "relevant_passage_ids": [
+        "ret-current-deletion"
+      ],
+      "required_passage_ids": [
+        "ret-current-deletion"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "thirty days"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "ret-current-deletion": 3
+      },
+      "filters": {
+        "document_ids": [
+          "retention-current"
+        ]
+      }
+    },
+    {
+      "case_id": "m-sg-hours",
+      "category": "metadata_filtered",
+      "query": "What are the Singapore support desk hours?",
+      "relevant_passage_ids": [
+        "sg-service-hours"
+      ],
+      "required_passage_ids": [
+        "sg-service-hours"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "Monday through Saturday",
+        "Singapore Time"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "sg-service-hours": 3
+      },
+      "filters": {
+        "document_ids": [
+          "support-sg"
+        ],
+        "source_kinds": [
+          "markdown"
+        ]
+      }
+    },
+    {
+      "case_id": "m-python-lease",
+      "category": "metadata_filtered",
+      "query": "What does the Python scheduler's LeaseGuard renew raise for a non-owner?",
+      "relevant_passage_ids": [
+        "scheduler-lease-guard"
+      ],
+      "required_passage_ids": [
+        "scheduler-lease-guard"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "PermissionError"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "scheduler-lease-guard": 3
+      },
+      "filters": {
+        "languages": [
+          "python"
+        ]
+      }
+    },
+    {
+      "case_id": "m-security-session",
+      "category": "metadata_filtered",
+      "query": "After how many idle minutes does an administrative session lock?",
+      "relevant_passage_ids": [
+        "sec-session"
+      ],
+      "required_passage_ids": [
+        "sec-session"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "twenty minutes"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "sec-session": 3
+      },
+      "filters": {
+        "tags": [
+          "security"
+        ]
+      }
+    },
+    {
+      "case_id": "b-security-overview",
+      "category": "broad_summary",
+      "query": "Summarize the key controls described in the security standard.",
+      "relevant_passage_ids": [
+        "sec-session",
+        "sec-417",
+        "sec-backup-encryption",
+        "sec-breakglass",
+        "sec-log-retention",
+        "sec-phishing"
+      ],
+      "required_passage_ids": [
+        "sec-417",
+        "sec-backup-encryption"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "SEC-417",
+        "AES-256"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "sec-417": 3,
+        "sec-backup-encryption": 3,
+        "sec-session": 1,
+        "sec-breakglass": 1,
+        "sec-log-retention": 1,
+        "sec-phishing": 1
+      }
+    },
+    {
+      "case_id": "b-travel-overview",
+      "category": "broad_summary",
+      "query": "What travel policies apply to both employees and contractors?",
+      "relevant_passage_ids": [
+        "trv-employee-domestic",
+        "trv-employee-international",
+        "trv-employee-ground",
+        "trv-contractor-approval",
+        "trv-contractor-lodging",
+        "trv-contractor-deadline"
+      ],
+      "required_passage_ids": [
+        "trv-employee-domestic",
+        "trv-contractor-approval"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "Procurement",
+        "manager"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "trv-employee-domestic": 3,
+        "trv-contractor-approval": 3,
+        "trv-employee-international": 1,
+        "trv-employee-ground": 1,
+        "trv-contractor-lodging": 1,
+        "trv-contractor-deadline": 1
+      }
+    },
+    {
+      "case_id": "b-ops-overview",
+      "category": "broad_summary",
+      "query": "What does the operations catalog document?",
+      "relevant_passage_ids": [
+        "ops-service-registry",
+        "ops-qpx731",
+        "ops-release-windows",
+        "ops-p1-escalation",
+        "ops-batch-ledger",
+        "ops-status-probes"
+      ],
+      "required_passage_ids": [
+        "ops-service-registry",
+        "ops-qpx731",
+        "ops-status-probes"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "SVC-1042",
+        "QPX-731"
+      ],
+      "expects_supported_answer": true,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "ops-service-registry": 3,
+        "ops-qpx731": 3,
+        "ops-status-probes": 3,
+        "ops-release-windows": 1,
+        "ops-p1-escalation": 1,
+        "ops-batch-ledger": 1
+      }
+    },
+    {
+      "case_id": "u-office-temp",
+      "category": "unsupported",
+      "query": "What is the office temperature policy?",
+      "relevant_passage_ids": [],
+      "required_passage_ids": [],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [],
+      "expects_supported_answer": false,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {}
+    },
+    {
+      "case_id": "u-ceo-salary",
+      "category": "unsupported",
+      "query": "What is the CEO's annual salary?",
+      "relevant_passage_ids": [],
+      "required_passage_ids": [],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [],
+      "expects_supported_answer": false,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {}
+    },
+    {
+      "case_id": "u-all-hands",
+      "category": "unsupported",
+      "query": "Which day is the company all-hands meeting held?",
+      "relevant_passage_ids": [],
+      "required_passage_ids": [],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [],
+      "expects_supported_answer": false,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {}
+    },
+    {
+      "case_id": "u-support-phone",
+      "category": "unsupported",
+      "query": "What is the customer support phone number for the portal?",
+      "relevant_passage_ids": [],
+      "required_passage_ids": [],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [],
+      "expects_supported_answer": false,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {}
+    },
+    {
+      "case_id": "cf-lodging-cap",
+      "category": "conflicting_evidence",
+      "query": "What is the nightly contractor lodging cap?",
+      "relevant_passage_ids": [
+        "trv-contractor-lodging",
+        "faq-lodging-cap"
+      ],
+      "required_passage_ids": [
+        "trv-contractor-lodging",
+        "faq-lodging-cap"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "cannot answer reliably"
+      ],
+      "expects_supported_answer": false,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "trv-contractor-lodging": 3,
+        "faq-lodging-cap": 3
+      }
+    },
+    {
+      "case_id": "cf-trip-approval",
+      "category": "conflicting_evidence",
+      "query": "Can contractors approve their own trips?",
+      "relevant_passage_ids": [
+        "trv-contractor-approval",
+        "faq-trip-approval"
+      ],
+      "required_passage_ids": [
+        "trv-contractor-approval",
+        "faq-trip-approval"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "cannot answer reliably"
+      ],
+      "expects_supported_answer": false,
+      "reviewed": true,
+      "split": "test",
+      "relevance_grades": {
+        "trv-contractor-approval": 3,
+        "faq-trip-approval": 3
+      }
+    },
+    {
+      "case_id": "cf-expense-deadline",
+      "category": "conflicting_evidence",
+      "query": "How long do contractors have to submit travel expenses?",
+      "relevant_passage_ids": [
+        "trv-contractor-deadline",
+        "faq-expense-deadline"
+      ],
+      "required_passage_ids": [
+        "trv-contractor-deadline",
+        "faq-expense-deadline"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "cannot answer reliably"
+      ],
+      "expects_supported_answer": false,
+      "reviewed": true,
+      "split": "train",
+      "relevance_grades": {
+        "trv-contractor-deadline": 3,
+        "faq-expense-deadline": 3
+      }
+    },
+    {
+      "case_id": "cf-remote-equipment",
+      "category": "conflicting_evidence",
+      "query": "Above what price does remote-work equipment require approval?",
+      "relevant_passage_ids": [
+        "hr-remote-equipment",
+        "faq-remote-equipment"
+      ],
+      "required_passage_ids": [
+        "hr-remote-equipment",
+        "faq-remote-equipment"
+      ],
+      "expected_citation_pages": [],
+      "expected_answer_terms": [
+        "cannot answer reliably"
+      ],
+      "expects_supported_answer": false,
+      "reviewed": true,
+      "split": "dev",
+      "relevance_grades": {
+        "hr-remote-equipment": 3,
+        "faq-remote-equipment": 3
+      }
+    }
+  ]
+}

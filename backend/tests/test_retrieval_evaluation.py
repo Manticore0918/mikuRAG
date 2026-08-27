@@ -6,6 +6,7 @@ from app.rag.evaluation import (
     RetrievalEvaluationCase,
     RetrievalEvaluationMetrics,
     RetrievalEvaluationObservation,
+    bootstrap_confidence_intervals,
     compare_evaluations,
     evaluate_retrieval,
     load_evaluation_set,
@@ -41,6 +42,7 @@ def test_retrieval_evaluator_measures_quality_latency_and_evidence_usage() -> No
             required_passage_ids=("a", "b"),
             expected_citation_pages=(1, 2),
             expects_supported_answer=True,
+            relevance_grades={"a": 3, "b": 3},
         ),
         RetrievalEvaluationCase(
             case_id="two",
@@ -77,22 +79,67 @@ def test_retrieval_evaluator_measures_quality_latency_and_evidence_usage() -> No
 
     metrics = evaluate_retrieval(cases, observations)
 
+    assert metrics.recall_at_1 == pytest.approx(0.5)
+    assert metrics.recall_at_5 == pytest.approx(0.75)
     assert metrics.recall_at_10 == pytest.approx(0.75)
     assert metrics.recall_after_reranking == pytest.approx(0.75)
     assert metrics.mean_reciprocal_rank == pytest.approx(0.75)
+    assert metrics.ndcg_at_10 == pytest.approx(0.693_4, abs=1e-4)
     assert metrics.citation_page_accuracy == pytest.approx(0.75)
+    assert metrics.citation_precision == 1
     assert metrics.answer_faithfulness == 1
     assert metrics.all_required_passages_rate == pytest.approx(0.5)
+    assert metrics.filter_correctness is None
     assert metrics.mean_retrieval_latency_ms == 15
+    assert metrics.retrieval_latency_p95_ms == pytest.approx(19.5)
     assert metrics.mean_end_to_end_latency_ms == 40
+    assert metrics.end_to_end_latency_p95_ms == pytest.approx(49.0)
     assert metrics.mean_evidence_tokens == 50
 
 
 def test_evaluation_comparison_reports_candidate_deltas() -> None:
-    baseline = RetrievalEvaluationMetrics(*([1.0] * 9))
-    candidate = RetrievalEvaluationMetrics(*([1.5] * 9))
+    baseline = RetrievalEvaluationMetrics(*([1.0] * 16))
+    candidate = RetrievalEvaluationMetrics(*([1.5] * 16))
 
     delta = compare_evaluations(baseline, candidate)
 
     assert set(delta) == set(RetrievalEvaluationMetrics.__dataclass_fields__)
     assert set(delta.values()) == {0.5}
+
+
+def test_bootstrap_confidence_intervals_are_reproducible_and_bounded() -> None:
+    cases = [
+        RetrievalEvaluationCase(
+            case_id=f"case-{index}",
+            category="narrow_fact",
+            query=f"Question {index}?",
+            relevant_passage_ids=(f"p{index}",),
+            required_passage_ids=(f"p{index}",),
+            expected_citation_pages=(),
+            expects_supported_answer=True,
+            relevance_grades={f"p{index}": 3},
+        )
+        for index in range(6)
+    ]
+    observations = [
+        RetrievalEvaluationObservation(
+            case_id=f"case-{index}",
+            retrieved_passage_ids=(f"p{index}",) if index % 2 == 0 else ("wrong",),
+            reranked_passage_ids=(f"p{index}",) if index % 2 == 0 else ("wrong",),
+            citation_pages=(),
+            answer_faithful=True,
+            retrieval_latency_ms=float(index * 5),
+            end_to_end_latency_ms=float(index * 10),
+            evidence_tokens=20,
+        )
+        for index in range(6)
+    ]
+
+    first = bootstrap_confidence_intervals(cases, observations, samples=500, seed=7)
+    second = bootstrap_confidence_intervals(cases, observations, samples=500, seed=7)
+
+    assert first == second
+    assert 0.0 <= first["recall_at_1"]["ci_low"] <= first["recall_at_1"]["ci_high"] <= 1.0
+    assert 0.0 <= first["recall_at_5"]["ci_low"] <= first["recall_at_5"]["ci_high"] <= 1.0
+    assert first["recall_at_1"]["mean"] == pytest.approx(0.5, abs=0.15)
+    assert first["retrieval_latency_p95_ms"]["ci_low"] >= 0

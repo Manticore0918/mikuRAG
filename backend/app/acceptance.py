@@ -423,9 +423,9 @@ def _not_measured(
     )
 
 
-def _metrics_dict(metrics: RetrievalEvaluationMetrics) -> dict[str, float]:
+def _metrics_dict(metrics: RetrievalEvaluationMetrics) -> dict[str, float | None]:
     return {
-        key: float(value)
+        key: float(value) if value is not None else None
         for key, value in asdict(metrics).items()
     }
 

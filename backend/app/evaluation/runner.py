@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import json
 import logging
 import re
 import shutil
@@ -25,11 +27,18 @@ from app.evaluation.contracts import (
     EvaluationWorkspace,
 )
 from app.evaluation.datasets import (
+    EvaluationCorpusDocument,
     ExecutableEvaluationCase,
     ExecutableEvaluationDataset,
     load_executable_dataset,
+    passage_matches_locator,
 )
 from app.evaluation.reporting import build_aggregate_report, write_evaluation_artifacts
+from app.ingestion.chunkers import (
+    _CHUNKER_PROFILES,
+    build_chunker,
+    canonical_profile,
+)
 from app.ingestion.dispatch import enqueue_ingestion
 from app.ingestion.embeddings import embed_texts
 from app.ingestion.storage import remove_stored_file_sync, storage_path
@@ -86,9 +95,12 @@ class EvaluationRuntime(Protocol):
         self,
         workspace: EvaluationWorkspace,
         case: ExecutableEvaluationCase,
+        dataset: ExecutableEvaluationDataset,
         *,
         include_answers: bool,
     ) -> EvaluationCaseRecord: ...
+
+    def ingestion_statistics(self) -> dict[str, object]: ...
 
     async def cleanup(self, workspace: EvaluationWorkspace) -> None: ...
 
@@ -99,17 +111,27 @@ class DatabaseEvaluationRuntime:
         *,
         settings: Settings | None = None,
         sessions: async_sessionmaker[AsyncSession] = session_factory,
-        enqueuer: Callable[[uuid.UUID], bool] = enqueue_ingestion,
+        enqueuer: Callable[[uuid.UUID, str | None], bool] = enqueue_ingestion,
         sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        target_chunking_version: str | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.sessions = sessions
         self.enqueuer = enqueuer
         self.sleeper = sleeper
+        self.target_chunking_version = target_chunking_version
+        self._ingestion_started = 0.0
+        self._ingestion_duration_ms: float | None = None
+        self._embedding_input_count = 0
+        self._total_chunk_count = 0
+        self._storage_estimate_bytes = 0
 
     def public_configuration(self, *, include_answers: bool) -> dict[str, object]:
+        profile = self.target_chunking_version or self.settings.chunking_version
+        chunker = build_chunker(self.settings, version=profile)
         return {
-            "chunking_version": self.settings.chunking_version,
+            "chunking_version": profile,
+            "chunking_config_hash": chunker.config.config_hash,
             "chunk_tokenizer": self.settings.chunk_tokenizer,
             "hierarchical_retrieval_enabled": (
                 self.settings.hierarchical_retrieval_enabled
@@ -151,6 +173,9 @@ class DatabaseEvaluationRuntime:
             document_ids={},
             storage_keys=(),
         )
+        self._storage_estimate_bytes = sum(
+            item.size_bytes for item in dataset.documents
+        )
         storage_keys: list[str] = []
         document_ids: dict[str, uuid.UUID] = {}
         try:
@@ -167,6 +192,17 @@ class DatabaseEvaluationRuntime:
                         destination,
                     )
                     storage_keys.append(storage_key)
+                    source_metadata: dict[str, object] = {"version": dataset.version}
+                    if (
+                        len(corpus_document.passages) == 1
+                        and not corpus_document.passages[0].locator_match
+                    ):
+                        source_metadata.update(
+                            {
+                                "passage_id": corpus_document.passages[0].passage_id,
+                                "locator_id": corpus_document.passages[0].locator_id,
+                            }
+                        )
                     document = Document(
                         knowledge_base_id=knowledge_base.id,
                         original_name=corpus_document.original_name,
@@ -177,16 +213,13 @@ class DatabaseEvaluationRuntime:
                         status=DocumentStatus.PENDING,
                         source_kind=corpus_document.source_kind,
                         language=corpus_document.language,
-                        tags=["evaluation", dataset.version],
+                        tags=["evaluation", dataset.version, *corpus_document.tags],
+                        source_uri=corpus_document.source_uri,
                         source_path=(
                             f"evaluation/{dataset.version}/"
                             f"{corpus_document.relative_path}"
                         ),
-                        source_metadata={
-                            "passage_id": corpus_document.passage_id,
-                            "locator_id": corpus_document.locator_id,
-                            "version": dataset.version,
-                        },
+                        source_metadata=source_metadata,
                         ingestion_stage="queued",
                         ingestion_progress=0,
                         ingestion_attempts=0,
@@ -203,8 +236,9 @@ class DatabaseEvaluationRuntime:
                 document_ids=document_ids,
                 storage_keys=tuple(storage_keys),
             )
+            self._ingestion_started = perf_counter()
             for document_id in document_ids.values():
-                if not self.enqueuer(document_id):
+                if not self.enqueuer(document_id, self.target_chunking_version):
                     raise EvaluationRuntimeError(
                         "The evaluation Document could not be queued; verify Redis and the worker"
                     )
@@ -244,6 +278,16 @@ class DatabaseEvaluationRuntime:
                         f"Evaluation Ingestion failed for: {names}",
                         documents=records,
                     )
+                await self._bind_gold_passages(workspace, dataset)
+                self._ingestion_duration_ms = (
+                    perf_counter() - self._ingestion_started
+                ) * 1_000
+                self._total_chunk_count = sum(
+                    item.chunk_count for item in records
+                )
+                self._embedding_input_count = await self._count_embedding_inputs(
+                    workspace
+                )
                 return records
             if asyncio.get_running_loop().time() >= deadline:
                 records = await self._document_records(workspace, dataset, documents)
@@ -257,6 +301,7 @@ class DatabaseEvaluationRuntime:
         self,
         workspace: EvaluationWorkspace,
         case: ExecutableEvaluationCase,
+        dataset: ExecutableEvaluationDataset,
         *,
         include_answers: bool,
     ) -> EvaluationCaseRecord:
@@ -273,12 +318,22 @@ class DatabaseEvaluationRuntime:
                 metrics=metrics,
             )
         evidence_records = tuple(_evidence_record(item) for item in evidence)
+        filter_correct = _filter_correct(
+            dataset, workspace, case, evidence_records
+        )
         passage_ids = _ordered_unique(item.passage_id for item in evidence_records)
         citation_pages = _citation_pages(evidence)
         retrieval_passed = (
             sufficient and set(case.required_passage_ids) <= set(passage_ids)
             if case.expects_supported_answer
-            else not sufficient
+            else (
+                # Conflicting-evidence cases (non-supported with required passages)
+                # pass retrieval only when the retriever surfaced both sides of the
+                # conflict; sufficient is expected here because both are strong hits.
+                set(case.required_passage_ids) <= set(passage_ids)
+                if case.required_passage_ids
+                else not sufficient
+            )
         )
         answer: EvaluationAnswerRecord | None = None
         answer_faithful = True
@@ -321,16 +376,14 @@ class DatabaseEvaluationRuntime:
                     term.casefold() in rendered.content.casefold()
                     for term in case.expected_answer_terms
                 )
-                if case.expects_supported_answer:
-                    answer_faithful = (
-                        rendered.outcome == "grounded_answer"
-                        and expected_terms_found
-                        and set(case.required_passage_ids) <= set(used_passages)
-                    )
-                else:
-                    answer_faithful = (
-                        rendered.outcome == "insufficient_evidence" and not used_passages
-                    )
+                answer_faithful = _answer_is_faithful(
+                    expects_supported_answer=case.expects_supported_answer,
+                    required_passage_ids=case.required_passage_ids,
+                    expected_terms_found=expected_terms_found,
+                    outcome=rendered.outcome,
+                    content=rendered.content,
+                    used_passages=used_passages,
+                )
                 answer = EvaluationAnswerRecord(
                     content=rendered.content,
                     outcome=rendered.outcome,
@@ -347,6 +400,7 @@ class DatabaseEvaluationRuntime:
             relevant_passage_ids=case.relevant_passage_ids,
             required_passage_ids=case.required_passage_ids,
             expected_citation_pages=case.expected_citation_pages,
+            filters=case.filters,
             retrieved_passage_ids=passage_ids,
             reranked_passage_ids=passage_ids,
             citation_pages=citation_pages,
@@ -360,6 +414,9 @@ class DatabaseEvaluationRuntime:
             retrieval_metrics=asdict(metrics),
             evidence=evidence_records,
             answer=answer,
+            split=case.split,
+            relevance_grades=dict(case.relevance_grades),
+            filter_correct=filter_correct,
         )
 
     async def cleanup(self, workspace: EvaluationWorkspace) -> None:
@@ -408,6 +465,11 @@ class DatabaseEvaluationRuntime:
                         Chunk.chunk_level == ChunkLevel.CHILD,
                     )
                 )
+                chunking_config_hash = await session.scalar(
+                    select(func.max(Chunk.chunking_config_hash)).where(
+                        Chunk.document_id == document_id
+                    )
+                )
                 records.append(
                     EvaluationDocumentRecord(
                         corpus_document_id=corpus_document.document_id,
@@ -422,19 +484,116 @@ class DatabaseEvaluationRuntime:
                         chunk_count=int(chunk_count or 0),
                         warnings=tuple(document.ingestion_warnings or []),
                         safe_error=document.safe_error,
+                        size_bytes=document.size_bytes or 0,
+                        chunking_config_hash=(
+                            str(chunking_config_hash)
+                            if isinstance(chunking_config_hash, str)
+                            and chunking_config_hash
+                            else None
+                        ),
                     )
                 )
         return tuple(records)
+
+    async def _count_embedding_inputs(
+        self,
+        workspace: EvaluationWorkspace,
+    ) -> int:
+        """Count chunks that were embedded during ingestion.
+
+        Every chunk level that received an embedding represents one embedding
+        model input during indexing (children, plus section/document summaries
+        for the hierarchical profile).
+        """
+        async with self.sessions() as session:
+            return int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(Chunk)
+                    .where(
+                        Chunk.document_id.in_(
+                            tuple(workspace.document_ids.values())
+                        ),
+                        Chunk.embedding_model.is_not(None),
+                    )
+                )
+                or 0
+            )
+
+    def ingestion_statistics(self) -> dict[str, object]:
+        return {
+            "ingestion_duration_ms": self._ingestion_duration_ms,
+            "embedding_input_count": self._embedding_input_count,
+            "total_chunk_count": self._total_chunk_count,
+            "storage_estimate_bytes": self._storage_estimate_bytes,
+        }
+
+    async def _bind_gold_passages(
+        self,
+        workspace: EvaluationWorkspace,
+        dataset: ExecutableEvaluationDataset,
+    ) -> None:
+        async with self.sessions() as session:
+            for corpus_document in dataset.documents:
+                if (
+                    len(corpus_document.passages) == 1
+                    and not corpus_document.passages[0].locator_match
+                ):
+                    continue
+                document_id = workspace.document_ids[corpus_document.document_id]
+                chunks = list(
+                    await session.scalars(
+                        select(Chunk).where(
+                            Chunk.document_id == document_id,
+                            Chunk.chunk_level == ChunkLevel.CHILD,
+                        )
+                    )
+                )
+                matched_passages: set[str] = set()
+                for chunk in chunks:
+                    locator = dict(chunk.locator)
+                    matches = [
+                        passage
+                        for passage in corpus_document.passages
+                        if passage_matches_locator(passage, locator)
+                    ]
+                    if len(matches) > 1:
+                        raise EvaluationRuntimeError(
+                            f"Evaluation Document '{corpus_document.document_id}' has "
+                            "an ambiguous gold locator mapping"
+                        )
+                    if matches:
+                        passage = matches[0]
+                        matched_passages.add(passage.passage_id)
+                        locator["source_passage_id"] = passage.passage_id
+                        locator["source_locator_id"] = passage.locator_id
+                    else:
+                        passage_id, locator_id = _unjudged_ids(corpus_document, chunk)
+                        locator["source_passage_id"] = passage_id
+                        locator["source_locator_id"] = locator_id
+                    chunk.locator = locator
+                missing = {
+                    passage.passage_id for passage in corpus_document.passages
+                } - matched_passages
+                if missing:
+                    raise EvaluationRuntimeError(
+                        f"Evaluation Document '{corpus_document.document_id}' did not "
+                        f"produce chunks for gold passages: {', '.join(sorted(missing))}"
+                    )
+            await session.commit()
 
 
 async def execute_evaluation(
     options: EvaluationRunOptions,
     *,
     runtime: EvaluationRuntime | None = None,
+    dataset: ExecutableEvaluationDataset | None = None,
 ) -> EvaluationExecutionResult:
     _validate_options(options)
-    dataset = load_executable_dataset(options.dataset_path)
-    active_runtime = runtime or DatabaseEvaluationRuntime()
+    dataset = dataset or load_executable_dataset(options.dataset_path)
+    active_runtime = runtime or DatabaseEvaluationRuntime(
+        target_chunking_version=options.target_chunking_version
+    )
     run_id = options.run_id or _new_run_id()
     started_at = datetime.now(UTC)
     workspace: EvaluationWorkspace | None = None
@@ -443,6 +602,7 @@ async def execute_evaluation(
     safe_error: str | None = None
     cleaned_up = False
     caught_error: Exception | None = None
+    ingestion_stats: dict[str, object] = {}
 
     try:
         workspace = await active_runtime.create_workspace(dataset, run_id)
@@ -452,11 +612,13 @@ async def execute_evaluation(
             timeout_seconds=options.ingestion_timeout_seconds,
             poll_seconds=options.poll_seconds,
         )
+        ingestion_stats = active_runtime.ingestion_statistics()
         for case in dataset.cases:
             cases.append(
                 await active_runtime.run_case(
                     workspace,
                     case,
+                    dataset,
                     include_answers=options.include_answers,
                 )
             )
@@ -493,6 +655,17 @@ async def execute_evaluation(
                     f"{safe_error}; {cleanup_message}" if safe_error else cleanup_message
                 )
 
+    configuration = dict(
+        active_runtime.public_configuration(
+            include_answers=options.include_answers
+        )
+    )
+    configuration["bootstrap_samples"] = options.bootstrap_samples
+    configuration["bootstrap_seed"] = options.bootstrap_seed
+    raw_config_hash = configuration.get("chunking_config_hash")
+    chunking_config_hash = (
+        str(raw_config_hash) if isinstance(raw_config_hash, str) else None
+    )
     run = EvaluationRunRecord(
         schema_version=1,
         run_id=run_id,
@@ -504,12 +677,23 @@ async def execute_evaluation(
         knowledge_base_name=(workspace.knowledge_base_name if workspace else None),
         knowledge_base_cleaned_up=cleaned_up,
         include_answers=options.include_answers,
-        configuration=active_runtime.public_configuration(
-            include_answers=options.include_answers
-        ),
+        configuration=configuration,
         documents=documents,
         cases=tuple(cases),
         safe_error=safe_error,
+        chunking_config_hash=chunking_config_hash,
+        ingestion_duration_ms=(
+            float(ingestion_stats["ingestion_duration_ms"])
+            if ingestion_stats.get("ingestion_duration_ms") is not None
+            else None
+        ),
+        embedding_input_count=int(
+            ingestion_stats.get("embedding_input_count") or 0
+        ),
+        total_chunk_count=int(ingestion_stats.get("total_chunk_count") or 0),
+        storage_estimate_bytes=int(
+            ingestion_stats.get("storage_estimate_bytes") or 0
+        ),
     )
     aggregate = build_aggregate_report(run)
     artifacts = write_evaluation_artifacts(options.output_dir, run, aggregate)
@@ -567,8 +751,107 @@ def _citation_pages(evidence: list[Evidence]) -> tuple[int, ...]:
     return tuple(dict.fromkeys(pages))
 
 
+def _unjudged_ids(
+    document: EvaluationCorpusDocument,
+    chunk: Chunk,
+) -> tuple[str, str]:
+    locator_text = json.dumps(chunk.locator, sort_keys=True, separators=(",", ":"))
+    locator_hash = hashlib.sha256(locator_text.encode("utf-8")).hexdigest()[:16]
+    content_key = (chunk.content_hash or hashlib.sha256(chunk.text.encode()).hexdigest())[:16]
+    return (
+        f"unjudged:{document.document_id}:{content_key}",
+        f"unjudged:{document.document_id}:{locator_hash}",
+    )
+
+
 def _ordered_unique(values) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
+
+
+def _filter_correct(
+    dataset: ExecutableEvaluationDataset,
+    workspace: EvaluationWorkspace,
+    case: ExecutableEvaluationCase,
+    evidence_records: tuple[EvaluationEvidenceRecord, ...],
+) -> bool | None:
+    """Whether every retrieved piece of evidence satisfied the case filters.
+
+    Returns ``None`` when the case carries no metadata filters. Evidence whose
+    source Document is outside the corpus, or that violates a filter, fails the
+    check. An empty evidence list vacuously respects the filters.
+    """
+    if not case.filters:
+        return None
+    db_id_to_corpus_id = {
+        str(document_id): corpus_id
+        for corpus_id, document_id in workspace.document_ids.items()
+    }
+    corpus_documents = {item.document_id: item for item in dataset.documents}
+    for record in evidence_records:
+        corpus_id = db_id_to_corpus_id.get(record.document_id)
+        document = corpus_documents.get(corpus_id) if corpus_id else None
+        if document is None or not _document_satisfies_filters(
+            document, case.filters
+        ):
+            return False
+    return True
+
+
+def _document_satisfies_filters(
+    document: EvaluationCorpusDocument,
+    filters: dict[str, tuple[str, ...]],
+) -> bool:
+    if (
+        "document_ids" in filters
+        and document.document_id not in filters["document_ids"]
+    ):
+        return False
+    if "tags" in filters and not set(filters["tags"]) <= set(document.tags):
+        return False
+    if (
+        "source_kinds" in filters
+        and document.source_kind not in filters["source_kinds"]
+    ):
+        return False
+    if "languages" in filters and document.language not in filters["languages"]:
+        return False
+    return True
+
+
+_CONFLICT_PREFIX = "i cannot answer reliably because the retrieved documents conflict"
+
+
+def _answer_is_faithful(
+    *,
+    expects_supported_answer: bool,
+    required_passage_ids: tuple[str, ...],
+    expected_terms_found: bool,
+    outcome: str,
+    content: str,
+    used_passages: tuple[str, ...],
+) -> bool:
+    """Score answer faithfulness for one evaluation case.
+
+    Supported cases must produce a grounded answer that contains every expected
+    term and cites every required passage. Unsupported cases (no required
+    passages) are faithful only when they refuse with an insufficiency statement
+    and cite nothing. Conflicting-evidence cases (unsupported but with required
+    passages) are faithful only when they refuse by naming both sides of the
+    conflict and cite both required passages.
+    """
+    if expects_supported_answer:
+        return (
+            outcome == "grounded_answer"
+            and expected_terms_found
+            and set(required_passage_ids) <= set(used_passages)
+        )
+    if required_passage_ids:
+        return (
+            outcome == "conflicting_evidence"
+            and content.casefold().startswith(_CONFLICT_PREFIX)
+            and set(required_passage_ids) <= set(used_passages)
+        )
+    return outcome == "insufficient_evidence" and not used_passages
 
 
 def _validate_options(options: EvaluationRunOptions) -> None:
@@ -578,6 +861,14 @@ def _validate_options(options: EvaluationRunOptions) -> None:
         raise ValueError("poll_seconds must be positive")
     if options.run_id is not None and not _RUN_ID.fullmatch(options.run_id):
         raise ValueError("run_id must contain 4-80 letters, numbers, underscores, or hyphens")
+    if (
+        options.target_chunking_version is not None
+        and canonical_profile(options.target_chunking_version)
+        not in _CHUNKER_PROFILES
+    ):
+        raise ValueError(
+            f"Unsupported chunking profile: {options.target_chunking_version}"
+        )
 
 
 def _knowledge_base_name(version: str, run_id: str) -> str:

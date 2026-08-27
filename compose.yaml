@@ -94,7 +94,7 @@ services:
 
   evaluate:
     build: ./backend
-    command: ["python", "-m", "app.evaluation_cli"]
+    command: ["python", "-m", "app.evaluation_cli", "run"]
     environment: *backend-environment
     volumes:
       - uploads:/data/uploads

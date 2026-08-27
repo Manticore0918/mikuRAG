@@ -13,6 +13,9 @@ class EvaluationRunOptions:
     ingestion_timeout_seconds: int = 300
     poll_seconds: float = 2.0
     run_id: str | None = None
+    target_chunking_version: str | None = None
+    bootstrap_samples: int = 2000
+    bootstrap_seed: int | None = 0
 
 
 @dataclass(frozen=True)
@@ -37,6 +40,8 @@ class EvaluationDocumentRecord:
     chunk_count: int
     warnings: tuple[dict[str, Any], ...]
     safe_error: str | None
+    size_bytes: int = 0
+    chunking_config_hash: str | None = None
 
 
 @dataclass(frozen=True)
@@ -73,6 +78,7 @@ class EvaluationCaseRecord:
     relevant_passage_ids: tuple[str, ...]
     required_passage_ids: tuple[str, ...]
     expected_citation_pages: tuple[int, ...]
+    filters: dict[str, tuple[str, ...]]
     retrieved_passage_ids: tuple[str, ...]
     reranked_passage_ids: tuple[str, ...]
     citation_pages: tuple[int, ...]
@@ -86,6 +92,9 @@ class EvaluationCaseRecord:
     retrieval_metrics: dict[str, Any]
     evidence: tuple[EvaluationEvidenceRecord, ...]
     answer: EvaluationAnswerRecord | None = None
+    split: str = "train"
+    relevance_grades: dict[str, int] = field(default_factory=dict)
+    filter_correct: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -104,6 +113,11 @@ class EvaluationRunRecord:
     documents: tuple[EvaluationDocumentRecord, ...] = field(default_factory=tuple)
     cases: tuple[EvaluationCaseRecord, ...] = field(default_factory=tuple)
     safe_error: str | None = None
+    chunking_config_hash: str | None = None
+    ingestion_duration_ms: float | None = None
+    embedding_input_count: int = 0
+    total_chunk_count: int = 0
+    storage_estimate_bytes: int = 0
 
 
 @dataclass(frozen=True)

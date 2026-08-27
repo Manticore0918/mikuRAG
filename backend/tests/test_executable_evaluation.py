@@ -84,7 +84,15 @@ class FakeRuntime:
             )
         return records
 
-    async def run_case(self, workspace, case, *, include_answers):
+    def ingestion_statistics(self) -> dict[str, object]:
+        return {
+            "ingestion_duration_ms": 0.0,
+            "embedding_input_count": 4,
+            "total_chunk_count": 4,
+            "storage_estimate_bytes": 4096,
+        }
+
+    async def run_case(self, workspace, case, dataset, *, include_answers):
         self.actions.append(f"case:{case.case_id}:{include_answers}")
         passages = case.required_passage_ids if case.expects_supported_answer else ()
         answer = (
@@ -115,6 +123,7 @@ class FakeRuntime:
             relevant_passage_ids=case.relevant_passage_ids,
             required_passage_ids=case.required_passage_ids,
             expected_citation_pages=case.expected_citation_pages,
+            filters=case.filters,
             retrieved_passage_ids=passages,
             reranked_passage_ids=passages,
             citation_pages=case.expected_citation_pages,
@@ -143,13 +152,15 @@ def test_versioned_executable_corpus_has_stable_documents_and_cases() -> None:
     assert dataset.contains_sensitive_data is False
     assert len(dataset.documents) == 4
     assert len(dataset.cases) == 5
-    assert {item.passage_id for item in dataset.documents} == {
+    passages = {passage.passage_id for item in dataset.documents for passage in item.passages}
+    assert passages == {
         "hr-leave-p3",
         "security-codes-p8",
         "finance-assets-p12",
         "security-access-p14-15",
     }
-    assert {item.locator_id for item in dataset.documents} == {
+    locators = {passage.locator_id for item in dataset.documents for passage in item.passages}
+    assert locators == {
         "markdown:leave-policy#annual-leave-carry-over",
         "markdown:security-incident#incident-code-sec-417",
         "markdown:asset-approval#high-value-equipment-approval",
@@ -176,6 +187,12 @@ async def test_executable_runner_writes_raw_and_aggregate_artifacts(tmp_path: Pa
     assert result.run.knowledge_base_cleaned_up is True
     assert result.aggregate["retrieval_pass_rate"] == 1
     assert result.aggregate["metrics"]["answer_faithfulness"] == 1
+    assert result.run.embedding_input_count == 4
+    assert result.run.total_chunk_count == 4
+    assert result.run.storage_estimate_bytes == 4096
+    assert result.run.ingestion_duration_ms == 0.0
+    assert result.run.configuration["bootstrap_samples"] == 2000
+    assert result.run.configuration["bootstrap_seed"] == 0
     assert result.artifacts.raw_json.is_file()
     assert result.artifacts.report_json.is_file()
     assert result.artifacts.report_markdown.is_file()
@@ -183,6 +200,7 @@ async def test_executable_runner_writes_raw_and_aggregate_artifacts(tmp_path: Pa
     assert raw["evaluation_set_version"] == "executable_v1"
     assert len(raw["documents"]) == 4
     assert len(raw["cases"]) == 5
+    assert raw["embedding_input_count"] == 4
     assert runtime.actions[-1] == "cleanup"
 
 
@@ -235,3 +253,30 @@ async def test_failed_answers_are_all_recorded_before_run_fails(tmp_path: Path) 
     assert result.artifacts.raw_json.is_file()
     assert result.artifacts.report_json.is_file()
     assert runtime.actions[-1] == "cleanup"
+
+
+@pytest.mark.asyncio
+async def test_executable_runner_accepts_a_pre_filtered_dataset(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    from app.evaluation.datasets import load_executable_dataset
+
+    runtime = FakeRuntime()
+    dataset = load_executable_dataset(CORPUS)
+    filtered = replace(dataset, cases=dataset.cases[:2])
+
+    result = await execute_evaluation(
+        EvaluationRunOptions(
+            dataset_path=CORPUS,
+            output_dir=tmp_path,
+            run_id="test-run-filtered",
+            target_chunking_version="token_recursive_v1",
+        ),
+        runtime=runtime,
+        dataset=filtered,
+    )
+
+    assert result.run.status == "completed"
+    assert len(result.run.cases) == 2
+    assert result.run.evaluation_set_version == "executable_v1"
+    assert result.run.configuration["chunking_version"] == "legacy"
