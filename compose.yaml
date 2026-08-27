@@ -51,6 +51,7 @@ x-backend-environment: &backend-environment
   MIKURAG_RERANKER_BATCH_SIZE: ${MIKURAG_RERANKER_BATCH_SIZE:-8}
   MIKURAG_RERANKER_TIMEOUT_SECONDS: ${MIKURAG_RERANKER_TIMEOUT_SECONDS:-15}
   MIKURAG_RERANKER_MAX_CONCURRENCY: ${MIKURAG_RERANKER_MAX_CONCURRENCY:-1}
+  HF_HOME: /data/models/huggingface
   MIKURAG_QUERY_REWRITE_TIMEOUT_SECONDS: ${MIKURAG_QUERY_REWRITE_TIMEOUT_SECONDS:-10}
   MIKURAG_ACCEPTANCE_MIN_QUALITY_IMPROVEMENT: ${MIKURAG_ACCEPTANCE_MIN_QUALITY_IMPROVEMENT:-0.02}
   MIKURAG_ACCEPTANCE_RETRIEVAL_P95_TARGET_MS: ${MIKURAG_ACCEPTANCE_RETRIEVAL_P95_TARGET_MS:-1500}
@@ -117,6 +118,7 @@ services:
     environment: *backend-environment
     volumes:
       - uploads:/data/uploads
+      - model-cache:/data/models
       - ./backend/evaluation/results:/app/evaluation/results
     depends_on:
       postgres:
@@ -130,6 +132,7 @@ services:
     environment: *backend-environment
     volumes:
       - uploads:/data/uploads
+      - model-cache:/data/models
     depends_on:
       postgres:
         condition: service_healthy
@@ -181,3 +184,4 @@ volumes:
   postgres-data:
   redis-data:
   uploads:
+  model-cache:

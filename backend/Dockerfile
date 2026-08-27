@@ -21,8 +21,8 @@ RUN pip install --no-cache-dir \
     && pip install --no-cache-dir ".[rerank]"
 
 RUN useradd --create-home --uid 10001 mikurag \
-    && mkdir -p /data/uploads \
-    && chown -R mikurag:mikurag /app /data/uploads
+    && mkdir -p /data/uploads /data/models \
+    && chown -R mikurag:mikurag /app /data/uploads /data/models
 
 USER mikurag
 
