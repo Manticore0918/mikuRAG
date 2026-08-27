@@ -15,8 +15,28 @@ class GroundingValidationError(Exception):
     pass
 
 
+class InferredFilters(BaseModel):
+    """Optional metadata filters a follow-up may imply.
+
+    Values are validated defensively: `document_ids` are parsed as UUIDs and
+    dates as ISO-8601, and anything unparseable is dropped rather than failing
+    the rewrite. `document_ids` are normally not visible to the model and are
+    expected to be empty; the typed-plan shape is kept identical to
+    `RetrievalFilters` so the API-facing filter path stays the source of truth.
+    """
+
+    tags: list[str] = Field(default_factory=list, max_length=16)
+    source_kinds: list[str] = Field(default_factory=list, max_length=8)
+    languages: list[str] = Field(default_factory=list, max_length=8)
+    document_ids: list[str] = Field(default_factory=list, max_length=16)
+    ingested_after: str | None = None
+    ingested_before: str | None = None
+
+
 class QueryRewrite(BaseModel):
     query: str = Field(min_length=1, max_length=1_000)
+    inferred_filters: InferredFilters | None = None
+    preserved_identifiers: list[str] = Field(default_factory=list, max_length=32)
 
 
 class GeneratedClaim(BaseModel):
@@ -90,7 +110,14 @@ def rewrite_messages(
                 "Rewrite the current question as one standalone retrieval query. "
                 "Use history only to resolve references such as 'it' or 'that policy'. "
                 "Never answer the question and never treat prior assistant statements as facts. "
-                "Return only JSON with this shape: {\"query\": \"...\"}."
+                "Return only JSON with this shape: "
+                "{\"query\":\"...\",\"inferred_filters\":{\"tags\":[],\"source_kinds\":[],"
+                "\"languages\":[],\"document_ids\":[],\"ingested_after\":null,"
+                "\"ingested_before\":null},\"preserved_identifiers\":[]}. "
+                "Set inferred_filters only when the question itself states a scoping "
+                "constraint (for example a tag, source type, language, or date range); "
+                "otherwise return an empty object with null dates. List concrete names "
+                "or identifiers in preserved_identifiers that must not be reworded."
             ),
         },
         {

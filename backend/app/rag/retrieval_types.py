@@ -1,6 +1,86 @@
+import enum
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
+
+
+class RetrievalMode(enum.StrEnum):
+    """Experiment modes select which retrieval legs and post-processing run."""
+
+    VECTOR = "vector"
+    FTS_BASELINE = "fts_baseline"
+    BM25 = "bm25"
+    HYBRID_RRF = "hybrid_rrf"
+    HYBRID_RRF_RERANKED = "hybrid_rrf_reranked"
+
+
+class RewriteStatus(enum.StrEnum):
+    """The outcome of query planning for a single turn."""
+
+    UNCHANGED = "unchanged"
+    REWRITTEN = "rewritten"
+    REWRITE_FAILED = "rewrite_failed"
+
+
+@dataclass(frozen=True)
+class RetrievalFilters:
+    """User-selectable metadata filters normalized into one object.
+
+    The authorization scope (knowledge base membership, Ready status, and the
+    embedding model) is never part of this object; it is applied separately as
+    a mandatory SQL scope inside every retriever.
+    """
+
+    document_ids: tuple[uuid.UUID, ...] = ()
+    tags: tuple[str, ...] = ()
+    source_kinds: tuple[str, ...] = ()
+    languages: tuple[str, ...] = ()
+    ingested_after: datetime | None = None
+    ingested_before: datetime | None = None
+
+    @classmethod
+    def empty(cls) -> "RetrievalFilters":
+        return cls()
+
+    def is_empty(self) -> bool:
+        return not (
+            self.document_ids
+            or self.tags
+            or self.source_kinds
+            or self.languages
+            or self.ingested_after is not None
+            or self.ingested_before is not None
+        )
+
+
+@dataclass(frozen=True)
+class QueryPlan:
+    """Typed result of query planning for one turn.
+
+    `effective_query` is what gets embedded and passed to the retriever: the
+    rewritten query when rewriting succeeded, otherwise the original query.
+    """
+
+    original_query: str
+    rewritten_query: str | None = None
+    inferred_filters: RetrievalFilters = field(default_factory=RetrievalFilters)
+    preserved_identifiers: tuple[str, ...] = ()
+    status: RewriteStatus = RewriteStatus.UNCHANGED
+
+    @property
+    def effective_query(self) -> str:
+        return self.rewritten_query or self.original_query
+
+
+@dataclass(frozen=True)
+class RetrievalPlan:
+    """The intent for one retrieval: the effective query, mode, and filters."""
+
+    query_text: str
+    mode: RetrievalMode = RetrievalMode.HYBRID_RRF
+    filters: RetrievalFilters = field(default_factory=RetrievalFilters)
+    query_plan: QueryPlan | None = None
 
 
 @dataclass
@@ -62,3 +142,13 @@ class RetrievalMetrics:
     parent_promotion_count: int = 0
     evidence_token_count: int = 0
     drop_counts: dict[str, int] = field(default_factory=dict)
+    retrieval_mode: str | None = None
+    lexical_kind: str | None = None
+    bm25_index_available: bool | None = None
+    filters_applied: bool = False
+    reranker_provider: str | None = None
+    reranker_model: str | None = None
+    reranker_version: str | None = None
+    reranker_latency_ms: float = 0.0
+    rewrite_status: str | None = None
+    rewrite_latency_ms: float = 0.0

@@ -11,7 +11,10 @@ COPY evaluation ./evaluation
 COPY alembic.ini ./
 COPY migrations ./migrations
 
-RUN pip install --no-cache-dir .
+# The production image includes the optional local reranker so selecting
+# MIKURAG_RERANKER_PROVIDER=cross_encoder never degrades merely because the
+# package was omitted at build time. The model itself remains lazy-loaded.
+RUN pip install --no-cache-dir ".[rerank]"
 
 RUN useradd --create-home --uid 10001 mikurag \
     && mkdir -p /data/uploads \

@@ -6,6 +6,8 @@ from urllib.parse import urlparse
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.rag.retrieval_types import RetrievalMode
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -79,8 +81,19 @@ class Settings(BaseSettings):
     retrieval_neighbor_expansion_count: int = Field(default=1, ge=0, le=3)
     retrieval_document_diversity_penalty: float = Field(default=0.2, ge=0, le=1)
     retrieval_rrf_k: int = Field(default=60, ge=1, le=200)
+    retrieval_rrf_semantic_weight: float = Field(default=1.0, ge=0, le=10)
+    retrieval_rrf_lexical_weight: float = Field(default=1.0, ge=0, le=10)
     retrieval_min_semantic_similarity: float = Field(default=0.28, ge=-1, le=1)
     retrieval_min_lexical_score: float = Field(default=0.01, ge=0, le=10)
+    retrieval_mode: RetrievalMode = RetrievalMode.HYBRID_RRF
+    bm25_fallback_to_fts: bool = True
+    bm25_hybrid_enabled: bool = False
+    reranker_provider: Literal["deterministic", "cross_encoder"] = "deterministic"
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_batch_size: int = Field(default=8, ge=1, le=64)
+    reranker_timeout_seconds: float = Field(default=15, ge=1, le=120)
+    reranker_max_concurrency: int = Field(default=1, ge=1, le=8)
+    query_rewrite_timeout_seconds: float = Field(default=10, ge=1, le=120)
     acceptance_min_quality_improvement: float = Field(default=0.02, ge=0, le=1)
     acceptance_retrieval_p95_target_ms: float = Field(
         default=1_500,

@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import re
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -23,8 +22,6 @@ from app.rag.grounding import (
     RenderedAnswer,
     grounded_messages,
     grounded_repair_messages,
-    parse_rewrite,
-    rewrite_messages,
     validate_and_render,
 )
 from app.rag.query_classification import (
@@ -32,7 +29,9 @@ from app.rag.query_classification import (
     QueryClassifier,
     QueryKind,
 )
+from app.rag.query_plan import build_query_plan
 from app.rag.retrieval import Evidence, retrieve_evidence
+from app.rag.retrieval_types import QueryPlan, RetrievalFilters, RetrievalMetrics
 from app.rag.summary_retrieval import SummaryContext, retrieve_summary_context
 
 logger = logging.getLogger(__name__)
@@ -47,13 +46,6 @@ UNVERIFIABLE_ANSWER = (
 )
 FAILED_ANSWER = "The answer could not be generated. Please try again later."
 
-FOLLOW_UP_PREFIX = re.compile(
-    r"^\s*(?:and\b|also\b|what about\b|how about\b|what else\b)", re.IGNORECASE
-)
-FOLLOW_UP_REFERENCE = re.compile(
-    r"\b(?:it|its|this|that|these|those|they|them|same|former|latter)\b",
-    re.IGNORECASE,
-)
 query_classifier: QueryClassifier = DeterministicQueryClassifier()
 
 
@@ -166,19 +158,16 @@ async def _mark_failed(assistant_message_id: uuid.UUID, safe_reason: str) -> Non
 async def _resolve_query(
     question: str,
     history: list[HistoryMessage],
-) -> tuple[str, dict[str, int]]:
-    is_short_follow_up = len(question.split()) <= 20 and (
-        FOLLOW_UP_PREFIX.search(question) is not None
-        or FOLLOW_UP_REFERENCE.search(question) is not None
+    *,
+    metrics: RetrievalMetrics | None = None,
+) -> tuple[QueryPlan, dict[str, int]]:
+    return await build_query_plan(
+        question,
+        history,
+        get_settings(),
+        complete=complete_json,
+        metrics=metrics,
     )
-    if not history or not is_short_follow_up:
-        return question, {}
-    try:
-        rewrite = await complete_json(rewrite_messages(question, history))
-        return parse_rewrite(rewrite.payload), rewrite.usage
-    except (GenerationProviderError, GroundingValidationError) as error:
-        logger.warning("Using the original question after query rewrite failed: %s", error)
-        return question, {}
 
 
 def _merge_usage(*items: dict[str, int]) -> dict[str, int]:
@@ -247,6 +236,8 @@ async def turn_events(
     conversation_id: uuid.UUID,
     user_message_id: uuid.UUID,
     assistant_message_id: uuid.UUID,
+    *,
+    filters: RetrievalFilters | None = None,
 ) -> AsyncIterator[str]:
     turn_stage = "loading"
     try:
@@ -255,7 +246,13 @@ async def turn_events(
         conversation, user_message, history = await _load_turn(
             conversation_id, user_message_id
         )
-        query, rewrite_usage = await _resolve_query(user_message.content, history)
+        retrieval_metrics = RetrievalMetrics()
+        plan, rewrite_usage = await _resolve_query(
+            user_message.content,
+            history,
+            metrics=retrieval_metrics,
+        )
+        query = plan.effective_query
         classification = query_classifier.classify(query)
         settings = get_settings()
         query_vector = (await embed_texts([query]))[0]
@@ -267,6 +264,9 @@ async def turn_events(
                 query,
                 query_vector,
                 settings,
+                filters=filters,
+                query_plan=plan,
+                metrics=retrieval_metrics,
             )
             if (
                 classification.kind == QueryKind.BROAD

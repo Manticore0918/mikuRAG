@@ -4,7 +4,7 @@ from collections import Counter
 from dataclasses import replace
 from time import perf_counter
 
-from sqlalchemy import and_, func, literal_column, or_, select, tuple_
+from sqlalchemy import and_, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
@@ -19,8 +19,25 @@ from app.rag.evidence_assembly import (
     merge_adjacent_candidates,
     suppress_duplicates,
 )
-from app.rag.reranking import DeterministicReranker, Reranker
-from app.rag.retrieval_types import Candidate, Evidence, RetrievalMetrics
+from app.rag.fusion import RrfFusionStrategy
+from app.rag.reranking import DeterministicReranker, Reranker, build_default_reranker
+from app.rag.retrieval_types import (
+    Candidate,
+    Evidence,
+    QueryPlan,
+    RetrievalFilters,
+    RetrievalMetrics,
+    RetrievalMode,
+)
+from app.rag.retrievers import (
+    Bm25UnavailableError,
+    LexicalRetriever,
+    PgSearchBM25LexicalRetriever,
+    PgVectorRetriever,
+    PostgresFTSLexicalRetriever,
+    _candidate_from_row,
+    is_bm25_available,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,45 +50,24 @@ def fuse_rankings(
     limit: int,
     max_per_document: int | None,
 ) -> list[Candidate]:
-    combined: dict[uuid.UUID, Candidate] = {}
-    for rank, candidate in enumerate(semantic, start=1):
-        current = combined.setdefault(candidate.chunk_id, replace(candidate))
-        current.semantic_similarity = candidate.semantic_similarity
-        current.fused_score += 1 / (rrf_k + rank)
-    for rank, candidate in enumerate(lexical, start=1):
-        current = combined.setdefault(candidate.chunk_id, replace(candidate))
-        current.lexical_score = candidate.lexical_score
-        current.fused_score += 1 / (rrf_k + rank)
-
-    ranked = sorted(
-        combined.values(),
-        key=lambda item: (
-            item.fused_score,
-            item.semantic_similarity if item.semantic_similarity is not None else -2.0,
-            item.lexical_score if item.lexical_score is not None else -1.0,
-        ),
-        reverse=True,
+    """Compatibility wrapper over the weighted RRF strategy (weights default to 1)."""
+    return RrfFusionStrategy().fuse(
+        semantic,
+        lexical,
+        rrf_k=rrf_k,
+        semantic_weight=1.0,
+        lexical_weight=1.0,
+        limit=limit,
+        max_per_document=max_per_document,
     )
-    if max_per_document is None:
-        return ranked[:limit]
-
-    selected: list[Candidate] = []
-    document_counts: Counter[uuid.UUID] = Counter()
-    for candidate in ranked:
-        if document_counts[candidate.document_id] >= max_per_document:
-            continue
-        selected.append(candidate)
-        document_counts[candidate.document_id] += 1
-        if len(selected) == limit:
-            break
-    return selected
 
 
 def is_sufficient(candidates: list[Candidate], settings: Settings) -> bool:
     return any(
         (
             candidate.semantic_similarity is not None
-            and candidate.semantic_similarity >= settings.retrieval_min_semantic_similarity
+            and candidate.semantic_similarity
+            >= settings.retrieval_min_semantic_similarity
         )
         or (
             candidate.lexical_score is not None
@@ -79,6 +75,12 @@ def is_sufficient(candidates: list[Candidate], settings: Settings) -> bool:
         )
         for candidate in candidates
     )
+
+
+def _coerce_mode(mode: RetrievalMode | str) -> RetrievalMode:
+    if isinstance(mode, RetrievalMode):
+        return mode
+    return RetrievalMode(mode)
 
 
 async def retrieve_evidence(
@@ -91,16 +93,39 @@ async def retrieve_evidence(
     reranker: Reranker | None = None,
     tokenizer: Tokenizer | None = None,
     metrics: RetrievalMetrics | None = None,
+    mode: RetrievalMode | str | None = None,
+    filters: RetrievalFilters | None = None,
+    query_plan: QueryPlan | None = None,
 ) -> tuple[list[Evidence], bool]:
+    """Retrieve ranked Evidence for a Knowledge Base under the active retrieval mode.
+
+    `mode` selects which legs run (`vector`, `fts_baseline`, `bm25`,
+    `hybrid_rrf`, `hybrid_rrf_reranked`); when omitted it falls back to
+    `settings.retrieval_mode`. `filters` are pushed into the retrieval SQL before
+    candidate limits. The authorization scope (knowledge base membership, Ready
+    status, embedding model) is always applied separately and first.
+    """
     retrieval_started = perf_counter()
     active_metrics = metrics or RetrievalMetrics()
+    active_mode = _coerce_mode(mode or settings.retrieval_mode)
+    active_filters = filters
+    if (active_filters is None or active_filters.is_empty()) and query_plan is not None:
+        active_filters = query_plan.inferred_filters
+    active_filters = active_filters or RetrievalFilters()
+    active_metrics.retrieval_mode = active_mode.value
+    active_metrics.filters_applied = not active_filters.is_empty()
+    if query_plan is not None:
+        active_metrics.rewrite_status = query_plan.status.value
+
     candidate_started = perf_counter()
-    semantic, lexical = await _generate_candidates(
+    semantic, lexical, lexical_kind = await _generate_candidates(
         session,
         knowledge_base_id,
         query_text,
         query_vector,
         settings,
+        mode=active_mode,
+        filters=active_filters,
         metrics=active_metrics,
     )
     active_metrics.candidate_generation_ms = (
@@ -108,34 +133,67 @@ async def retrieve_evidence(
     ) * 1_000
     active_metrics.semantic_candidate_count = len(semantic)
     active_metrics.lexical_candidate_count = len(lexical)
-    if not settings.hierarchical_retrieval_enabled:
-        selected = fuse_rankings(
-            semantic,
-            lexical,
-            rrf_k=settings.retrieval_rrf_k,
-            limit=settings.retrieval_evidence_limit,
-            max_per_document=settings.retrieval_max_chunks_per_document,
-        )
-        active_tokenizer = tokenizer or create_tokenizer(settings.chunk_tokenizer)
-        active_metrics.fused_candidate_count = len(selected)
+    active_metrics.lexical_kind = lexical_kind
+
+    reranked_mode = active_mode == RetrievalMode.HYBRID_RRF_RERANKED
+    hierarchical = settings.hierarchical_retrieval_enabled
+    fused = RrfFusionStrategy().fuse(
+        semantic,
+        lexical,
+        rrf_k=settings.retrieval_rrf_k,
+        semantic_weight=settings.retrieval_rrf_semantic_weight,
+        lexical_weight=settings.retrieval_rrf_lexical_weight,
+        limit=(
+            settings.retrieval_rerank_candidates
+            if reranked_mode or hierarchical
+            else settings.retrieval_evidence_limit
+        ),
+        max_per_document=(
+            None if reranked_mode or hierarchical else settings.retrieval_max_chunks_per_document
+        ),
+    )
+    active_metrics.fused_candidate_count = len(fused)
+
+    if reranked_mode:
+        active_reranker = reranker or build_default_reranker(settings)
+        rerank_started = perf_counter()
+        try:
+            reranked = await active_reranker.rerank(query_text, fused)
+            selected = reranked[: settings.retrieval_evidence_limit]
+        except Exception as error:
+            logger.warning("Reranker failed (%s); using fused order", error)
+            selected = fused[: settings.retrieval_evidence_limit]
+            active_metrics.reranker_provider = "fallback_fused_order"
+        else:
+            active_metrics.reranker_provider = getattr(
+                active_reranker, "provider_name", "unknown"
+            )
+            active_metrics.reranker_model = getattr(
+                active_reranker, "model_name", None
+            )
+            active_metrics.reranker_version = getattr(
+                active_reranker, "version", None
+            )
+        active_metrics.reranking_ms = (perf_counter() - rerank_started) * 1_000
+        active_metrics.reranker_latency_ms = active_metrics.reranking_ms
         active_metrics.reranked_candidate_count = len(selected)
+    else:
+        selected = fused
+        active_metrics.reranked_candidate_count = len(fused)
+
+    if not hierarchical:
+        active_tokenizer = tokenizer or create_tokenizer(settings.chunk_tokenizer)
         active_metrics.evidence_token_count = _evidence_token_count(
             selected, active_tokenizer
         )
-        active_metrics.drop_counts = {
-            "legacy_cap_or_limit": max(
-                0,
-                len({candidate.chunk_id for candidate in [*semantic, *lexical]})
-                - len(selected),
-            )
-        }
+        active_metrics.drop_counts = _legacy_drop_counts(semantic, lexical, selected)
         sufficient = is_sufficient(selected, settings)
         active_metrics.retrieval_duration_ms = (
             perf_counter() - retrieval_started
         ) * 1_000
         _emit_retrieval_observation(
             knowledge_base_id,
-            "legacy",
+            active_mode.value,
             selected,
             sufficient,
             active_metrics,
@@ -143,20 +201,15 @@ async def retrieve_evidence(
         return _to_evidence(selected), sufficient
 
     active_tokenizer = tokenizer or create_tokenizer(settings.chunk_tokenizer)
-    fused = fuse_rankings(
-        semantic,
-        lexical,
-        rrf_k=settings.retrieval_rrf_k,
-        limit=settings.retrieval_rerank_candidates,
-        max_per_document=None,
-    )
-    active_metrics.fused_candidate_count = len(fused)
-    active_reranker = reranker or DeterministicReranker()
-    rerank_started = perf_counter()
-    reranked = await active_reranker.rerank(query_text, fused)
-    active_metrics.reranking_ms = (perf_counter() - rerank_started) * 1_000
-    active_metrics.reranked_candidate_count = len(reranked)
-    deduplicated = suppress_duplicates(reranked)
+    if not reranked_mode:
+        # The hierarchical pipeline always begins with a deterministic rerank
+        # for ranking stability when no configured reranker ran.
+        rerank_started = perf_counter()
+        selected = await DeterministicReranker().rerank(query_text, fused)
+        active_metrics.reranking_ms = (perf_counter() - rerank_started) * 1_000
+        active_metrics.reranker_latency_ms = active_metrics.reranking_ms
+        active_metrics.reranker_provider = "deterministic"
+    deduplicated = suppress_duplicates(selected)
     seeds = apply_adaptive_diversity(
         deduplicated,
         limit=settings.retrieval_evidence_limit,
@@ -183,7 +236,7 @@ async def retrieve_evidence(
     )
     active_metrics.drop_counts = {
         **dict(drops),
-        "rerank_duplication": len(reranked) - len(deduplicated),
+        "rerank_duplication": len(selected) - len(deduplicated),
         "diversity_or_seed_limit": len(deduplicated) - len(seeds),
     }
     active_metrics.evidence_token_count = _evidence_token_count(
@@ -195,7 +248,7 @@ async def retrieve_evidence(
     ) * 1_000
     _emit_retrieval_observation(
         knowledge_base_id,
-        "hierarchical",
+        active_mode.value,
         selected,
         sufficient,
         active_metrics,
@@ -210,59 +263,108 @@ async def _generate_candidates(
     query_vector: list[float],
     settings: Settings,
     *,
+    mode: RetrievalMode,
+    filters: RetrievalFilters,
     metrics: RetrievalMetrics | None = None,
-) -> tuple[list[Candidate], list[Candidate]]:
-    distance = Chunk.embedding.cosine_distance(query_vector).label("distance")
-    common_filters = (
-        Document.knowledge_base_id == knowledge_base_id,
-        Document.status == DocumentStatus.READY,
-        Chunk.chunk_level == ChunkLevel.CHILD,
-        Chunk.embedding_model == settings.embedding_model_id,
-    )
-    semantic_started = perf_counter()
-    semantic_result = await session.execute(
-        select(Chunk, Document, distance)
-        .join(Document, Document.id == Chunk.document_id)
-        .where(*common_filters, Chunk.embedding.is_not(None))
-        .order_by(distance)
-        .limit(settings.retrieval_semantic_candidates)
-    )
-    if metrics is not None:
-        metrics.semantic_query_ms = (perf_counter() - semantic_started) * 1_000
-    semantic = [
-        _candidate_from_row(
-            chunk,
-            document,
-            semantic_similarity=1.0 - float(distance_value),
+) -> tuple[list[Candidate], list[Candidate], str | None]:
+    """Run the legs selected by the active mode and return (semantic, lexical, lexical_kind)."""
+    semantic: list[Candidate] = []
+    lexical: list[Candidate] = []
+    lexical_kind: str | None = None
+    if mode in (
+        RetrievalMode.VECTOR,
+        RetrievalMode.HYBRID_RRF,
+        RetrievalMode.HYBRID_RRF_RERANKED,
+    ):
+        semantic_started = perf_counter()
+        semantic = await PgVectorRetriever().retrieve(
+            session,
+            knowledge_base_id,
+            query_text,
+            query_vector,
+            filters=filters,
+            chunk_levels=(ChunkLevel.CHILD,),
+            limit=settings.retrieval_semantic_candidates,
+            settings=settings,
         )
-        for chunk, document, distance_value in semantic_result.all()
-    ]
+        if metrics is not None:
+            metrics.semantic_query_ms = (perf_counter() - semantic_started) * 1_000
+    if mode in (
+        RetrievalMode.FTS_BASELINE,
+        RetrievalMode.BM25,
+        RetrievalMode.HYBRID_RRF,
+        RetrievalMode.HYBRID_RRF_RERANKED,
+    ):
+        lexical_retriever, lexical_kind = await _resolve_lexical(
+            session, mode, settings, metrics
+        )
+        if lexical_retriever is not None:
+            lexical_started = perf_counter()
+            try:
+                lexical = await lexical_retriever.retrieve(
+                    session,
+                    knowledge_base_id,
+                    query_text,
+                    filters=filters,
+                    chunk_levels=(ChunkLevel.CHILD,),
+                    limit=settings.retrieval_lexical_candidates,
+                    settings=settings,
+                )
+            except Bm25UnavailableError:
+                if not settings.bm25_fallback_to_fts:
+                    raise
+                logger.warning("BM25 execution failed; retrying with PostgreSQL FTS")
+                lexical = await PostgresFTSLexicalRetriever().retrieve(
+                    session,
+                    knowledge_base_id,
+                    query_text,
+                    filters=filters,
+                    chunk_levels=(ChunkLevel.CHILD,),
+                    limit=settings.retrieval_lexical_candidates,
+                    settings=settings,
+                )
+                lexical_kind = "fts_fallback"
+            if metrics is not None:
+                metrics.lexical_query_ms = (perf_counter() - lexical_started) * 1_000
+    return semantic, lexical, lexical_kind
 
-    search_query = func.websearch_to_tsquery(literal_column("'simple'"), query_text)
-    lexical_rank = func.ts_rank_cd(Chunk.search_vector, search_query).label("lexical_rank")
-    lexical_started = perf_counter()
-    lexical_result = await session.execute(
-        select(Chunk, Document, lexical_rank)
-        .join(Document, Document.id == Chunk.document_id)
-        .where(
-            *common_filters,
-            Chunk.search_vector.is_not(None),
-            Chunk.search_vector.op("@@")(search_query),
+
+async def _resolve_lexical(
+    session: AsyncSession,
+    mode: RetrievalMode,
+    settings: Settings,
+    metrics: RetrievalMetrics | None,
+) -> tuple[LexicalRetriever | None, str | None]:
+    """Resolve the lexical retriever for a mode, falling back to FTS when needed.
+
+    Explicit `bm25` mode uses BM25 when available and otherwise falls back to FTS
+    (unless `bm25_fallback_to_fts` is disabled). Hybrid modes keep today's FTS
+    baseline until `bm25_hybrid_enabled` is turned on after the evaluation gate
+    passes, per the delivery rule that new retrieval behavior is off by default.
+    """
+    if mode == RetrievalMode.FTS_BASELINE:
+        return PostgresFTSLexicalRetriever(), "fts"
+    if mode == RetrievalMode.BM25:
+        if await is_bm25_available(session):
+            if metrics is not None:
+                metrics.bm25_index_available = True
+            return PgSearchBM25LexicalRetriever(), "bm25"
+        if metrics is not None:
+            metrics.bm25_index_available = False
+        if not settings.bm25_fallback_to_fts:
+            logger.warning(
+                "pg_search BM25 is unavailable and fallback is disabled for bm25 mode"
+            )
+            return None, "bm25_unavailable"
+        logger.warning(
+            "pg_search BM25 unavailable; using PostgreSQL FTS for bm25 mode"
         )
-        .order_by(lexical_rank.desc())
-        .limit(settings.retrieval_lexical_candidates)
-    )
-    if metrics is not None:
-        metrics.lexical_query_ms = (perf_counter() - lexical_started) * 1_000
-    lexical = [
-        _candidate_from_row(
-            chunk,
-            document,
-            lexical_score=float(rank_value),
-        )
-        for chunk, document, rank_value in lexical_result.all()
-    ]
-    return semantic, lexical
+        return PostgresFTSLexicalRetriever(), "fts_fallback"
+    if settings.bm25_hybrid_enabled and await is_bm25_available(session):
+        if metrics is not None:
+            metrics.bm25_index_available = True
+        return PgSearchBM25LexicalRetriever(), "bm25"
+    return PostgresFTSLexicalRetriever(), "fts"
 
 
 async def _expand_context(
@@ -378,43 +480,6 @@ async def _expand_context(
     return expanded
 
 
-def _candidate_from_row(
-    chunk: Chunk,
-    document: Document,
-    *,
-    semantic_similarity: float | None = None,
-    lexical_score: float | None = None,
-) -> Candidate:
-    heading_path = (
-        list(chunk.heading_path)
-        if isinstance(chunk.heading_path, list)
-        and all(isinstance(item, str) for item in chunk.heading_path)
-        else []
-    )
-    return Candidate(
-        chunk_id=chunk.id,
-        document_id=document.id,
-        document_name=document.original_name,
-        locator=chunk.locator,
-        text=chunk.text,
-        parent_chunk_id=chunk.parent_chunk_id,
-        ordinal=chunk.ordinal,
-        chunk_level=chunk.chunk_level,
-        start_page=chunk.start_page,
-        end_page=chunk.end_page,
-        start_offset=chunk.start_offset,
-        end_offset=chunk.end_offset,
-        heading_path=heading_path,
-        content_type=chunk.content_type,
-        token_count=chunk.token_count,
-        content_hash=chunk.content_hash,
-        chunking_version=chunk.chunking_version,
-        semantic_similarity=semantic_similarity,
-        lexical_score=lexical_score,
-        source_chunk_ids=(chunk.id,),
-    )
-
-
 def _to_evidence(candidates: list[Candidate]) -> list[Evidence]:
     return [
         Evidence(
@@ -447,6 +512,20 @@ def _evidence_token_count(candidates: list[Candidate], tokenizer: Tokenizer) -> 
     )
 
 
+def _legacy_drop_counts(
+    semantic: list[Candidate],
+    lexical: list[Candidate],
+    selected: list[Candidate],
+) -> dict[str, int]:
+    return {
+        "legacy_cap_or_limit": max(
+            0,
+            len({candidate.chunk_id for candidate in [*semantic, *lexical]})
+            - len(selected),
+        )
+    }
+
+
 def _emit_retrieval_observation(
     knowledge_base_id: uuid.UUID,
     mode: str,
@@ -459,6 +538,8 @@ def _emit_retrieval_observation(
         "retrieval_decision",
         knowledge_base_id=str(knowledge_base_id),
         retrieval_mode=mode,
+        rewrite_status=metrics.rewrite_status,
+        rewrite_latency_ms=round(metrics.rewrite_latency_ms, 2),
         sufficient=sufficient,
         semantic_candidate_count=metrics.semantic_candidate_count,
         lexical_candidate_count=metrics.lexical_candidate_count,

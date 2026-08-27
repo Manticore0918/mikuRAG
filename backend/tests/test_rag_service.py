@@ -7,6 +7,7 @@ from app.rag import service
 from app.rag.generation import GenerationProviderError, GenerationResult
 from app.rag.grounding import HistoryMessage
 from app.rag.retrieval import Evidence
+from app.rag.retrieval_types import RewriteStatus
 from app.rag.service import sse_event
 
 
@@ -40,12 +41,13 @@ async def test_standalone_question_with_history_skips_rewrite(
 
     monkeypatch.setattr(service, "complete_json", unexpected_rewrite)
 
-    query, usage = await service._resolve_query(
+    plan, usage = await service._resolve_query(
         "What is the Tokyo hotel limit?",
         [HistoryMessage(role="user", content="How many remote days are allowed?")],
     )
 
-    assert query == "What is the Tokyo hotel limit?"
+    assert plan.effective_query == "What is the Tokyo hotel limit?"
+    assert plan.status == RewriteStatus.UNCHANGED
     assert usage == {}
 
 
@@ -58,12 +60,14 @@ async def test_referential_follow_up_uses_original_question_when_rewrite_fails(
 
     monkeypatch.setattr(service, "complete_json", invalid_rewrite)
 
-    query, usage = await service._resolve_query(
+    plan, usage = await service._resolve_query(
         "Does that apply during the second week?",
         [HistoryMessage(role="user", content="How many remote days are allowed?")],
     )
 
-    assert query == "Does that apply during the second week?"
+    assert plan.effective_query == "Does that apply during the second week?"
+    assert plan.rewritten_query is None
+    assert plan.status == RewriteStatus.REWRITE_FAILED
     assert usage == {}
 
 

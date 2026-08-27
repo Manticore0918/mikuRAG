@@ -35,8 +35,38 @@ async def check_redis() -> DependencyHealth:
         await client.aclose()
 
 
-async def readiness() -> tuple[bool, dict[str, DependencyHealth]]:
-    database, redis = await asyncio.gather(check_database(), check_redis())
-    dependencies = {"database": database, "redis": redis}
-    return all(item["status"] == "ok" for item in dependencies.values()), dependencies
+async def check_bm25() -> DependencyHealth:
+    """Report whether the pg_search BM25 index is present and usable.
 
+    This is informational, not gating: the FTS baseline is always available, so
+    a missing extension or index must not flip readiness. Status is "ok" when
+    the fast BM25 path can run and "unavailable" when the FTS fallback is active.
+    """
+    try:
+        async with asyncio.timeout(2):
+            async with engine.connect() as connection:
+                row = await connection.execute(
+                    text(
+                        "SELECT "
+                        "EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_search')"
+                        " AND to_regclass('chunks_search_bm25') IS NOT NULL"
+                    )
+                )
+                available = bool(row.scalar())
+        if available:
+            return {"status": "ok", "detail": None}
+        return {
+            "status": "unavailable",
+            "detail": "pg_search BM25 index missing; using the FTS fallback path",
+        }
+    except Exception:
+        return {"status": "unavailable", "detail": "bm25 availability check failed"}
+
+
+async def readiness() -> tuple[bool, dict[str, DependencyHealth]]:
+    database, redis, bm25 = await asyncio.gather(check_database(), check_redis(), check_bm25())
+    # The BM25 leg is an optional accelerator; readiness is gated on the core
+    # dependencies only, with bm25 reported alongside for observability.
+    core = {"database": database, "redis": redis}
+    dependencies = {**core, "bm25": bm25}
+    return all(item["status"] == "ok" for item in core.values()), dependencies
