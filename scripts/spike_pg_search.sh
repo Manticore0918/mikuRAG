@@ -21,7 +21,7 @@
 set -euo pipefail
 
 IMAGE_TAG="${1:-paradedb/paradedb:0.24.1-pg16}"
-CONTAINER="mikurag-pg-search-spike"
+CONTAINER="mikurag-pg-search-spike-$$"
 PG_USER="mikurag"
 PG_PASSWORD="spike"
 PG_DB="mikurag"

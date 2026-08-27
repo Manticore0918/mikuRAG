@@ -69,9 +69,9 @@ x-backend-environment: &backend-environment
 
 services:
   postgres:
-    # ParadeDB bundles pg_search (BM25) and pgvector. Validate the pinned tag and
-    # SQL dialect with `./scripts/spike_pg_search.sh`; the stock pgvector image
-    # remains usable because migration 0010 guards extension creation.
+    # ParadeDB bundles pg_search (BM25) and pgvector. The pinned tag and SQL
+    # dialect are validated by the scripts/spike_pg_search scripts (ADR-0005);
+    # stock pgvector remains usable because migration 0010 is guarded.
     image: ${POSTGRES_IMAGE:-paradedb/paradedb:0.24.1-pg16}
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mikurag}
