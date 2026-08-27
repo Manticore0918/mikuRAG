@@ -41,7 +41,7 @@ def filters_sql(filters: RetrievalFilters | None) -> tuple[Any, ...]:
         predicates.append(Document.id.in_(filters.document_ids))
     if filters.tags:
         document_tags = (
-            func.unnest(Document.tags)
+            func.jsonb_array_elements_text(Document.tags)
             .table_valued("tag")
             .render_derived(name="document_tag")
         )
@@ -211,9 +211,10 @@ class PgSearchBM25LexicalRetriever:
         settings: Settings,
         metrics: RetrievalMetrics | None = None,
     ) -> list[Candidate]:
-        # pg_search 0.24.1 accepts a bound text query on the @@@ operator and
-        # exposes BM25 scoring from the `pdb` schema. Keep this version-pinned
-        # dialect aligned with ADR-0005 and the compatibility spike.
+        # Use pg_search's typed match query rather than its raw query-string
+        # parser. User questions routinely contain apostrophes and punctuation
+        # that are syntax in the raw parser but ordinary text to the tokenizer.
+        # Keep this version-pinned dialect aligned with ADR-0005 and the spike.
         score = func.pdb.score(Chunk.id).label("bm25_score")
         try:
             # A failed extension query aborts its transaction in PostgreSQL.
@@ -226,7 +227,7 @@ class PgSearchBM25LexicalRetriever:
                     .where(
                         *authorized_scope(knowledge_base_id, settings),
                         Chunk.chunk_level.in_(chunk_levels),
-                        Chunk.text.op("@@@")(query_text),
+                        Chunk.text.op("@@@")(func.pdb.match(query_text)),
                         *filters_sql(filters),
                     )
                     .order_by(score.desc())

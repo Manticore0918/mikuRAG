@@ -15,8 +15,17 @@ class FakeResult:
 
 
 class FakeConnection:
-    def __init__(self, *, extension_available: bool, fail_on: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        extension_available: bool,
+        installed_version: str = "0.24.3",
+        default_version: str = "0.24.3",
+        fail_on: str | None = None,
+    ) -> None:
         self.extension_available = extension_available
+        self.installed_version = installed_version
+        self.default_version = default_version
         self.fail_on = fail_on
         self.statements: list[str] = []
 
@@ -25,8 +34,10 @@ class FakeConnection:
         self.statements.append(rendered)
         if self.fail_on and self.fail_on in rendered:
             raise RuntimeError("fixture database failure")
-        if "pg_available_extensions" in rendered:
+        if "SELECT EXISTS" in rendered and "pg_available_extensions" in rendered:
             return FakeResult(self.extension_available)
+        if "installed_version" in rendered:
+            return FakeResult(f"{self.installed_version}|{self.default_version}")
         return FakeResult(None)
 
 
@@ -76,6 +87,21 @@ async def test_reconcile_keeps_fts_when_extension_is_unavailable() -> None:
 
     assert status["status"] == "unavailable"
     assert not any("CREATE EXTENSION" in statement for statement in connection.statements)
+
+
+@pytest.mark.asyncio
+async def test_reconcile_upgrades_extension_and_reindexes_existing_bm25_index() -> None:
+    connection = FakeConnection(
+        extension_available=True,
+        installed_version="0.24.1",
+        default_version="0.24.3",
+    )
+
+    status = await reconcile_optional_database_features(FakeEngine(connection))  # type: ignore[arg-type]
+
+    assert status["status"] == "ready"
+    assert any("ALTER EXTENSION pg_search UPDATE" in item for item in connection.statements)
+    assert any("REINDEX INDEX chunks_search_bm25" in item for item in connection.statements)
 
 
 @pytest.mark.asyncio

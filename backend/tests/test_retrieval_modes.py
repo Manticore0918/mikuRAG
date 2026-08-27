@@ -249,7 +249,9 @@ async def test_bm25_mode_uses_pg_search_when_available() -> None:
 
     executed = selects(session)
     assert len(executed) == 1
-    assert "@@@" in str(executed[0].compile())
+    compiled = str(executed[0].compile())
+    assert "@@@" in compiled
+    assert "pdb.match" in compiled
     assert metrics.lexical_kind == "bm25"
     assert metrics.bm25_index_available is True
 
@@ -513,7 +515,8 @@ async def test_tag_filters_are_case_insensitive_and_require_each_tag() -> None:
     values = compiled_values(statement)
 
     assert compiled.count("EXISTS") == 2
-    assert "unnest" in compiled
+    assert "jsonb_array_elements_text" in compiled
+    assert "unnest" not in compiled
     assert "policy" in values
     assert "security" in values
 

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ImageTag = "paradedb/paradedb:0.24.1-pg16"
+    [string]$ImageTag = "paradedb/paradedb:0.24.3-pg16"
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,6 +34,12 @@ SELECT id,
        left(text, 40) AS snippet
 FROM spike_docs
 WHERE text @@@ 'bm25 search ranking'
+ORDER BY pdb.score(id) DESC
+LIMIT 3;
+SELECT id,
+       pdb.score(id) AS bm25_score
+FROM spike_docs
+WHERE text @@@ pdb.match('What does PostgreSQL''s BM25 ranking provide?')
 ORDER BY pdb.score(id) DESC
 LIMIT 3;
 '@
