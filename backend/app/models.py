@@ -413,6 +413,9 @@ class Chunk(TimestampMixin, Base):
     chunking_version: Mapped[str] = mapped_column(
         String(64), nullable=False, default="legacy", server_default="legacy"
     )
+    chunking_config_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="", server_default=""
+    )
     content_hash: Mapped[str | None] = mapped_column(String(64))
     search_vector: Mapped[Any | None] = mapped_column(TSVECTOR)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(768))
@@ -472,6 +475,10 @@ class Chunk(TimestampMixin, Base):
         CheckConstraint(
             "content_hash IS NULL OR length(content_hash) = 64",
             name="chunks_content_hash_length_ck",
+        ),
+        CheckConstraint(
+            "chunking_config_hash = '' OR length(chunking_config_hash) = 64",
+            name="chunks_chunking_config_hash_length_ck",
         ),
         Index("chunks_search_vector_gin", "search_vector", postgresql_using="gin"),
         Index(

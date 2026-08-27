@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     upload_session_ttl_seconds: int = Field(default=86_400, ge=3_600, le=604_800)
     max_active_upload_sessions: int = Field(default=20, ge=1, le=100)
     max_document_pages: int = Field(default=500, ge=1, le=2_000)
-    chunking_version: Literal["legacy", "hierarchical_v1"] = "legacy"
+    chunking_version: Literal[
+        "legacy", "legacy_char_v1", "token_recursive_v1", "hierarchical_v1"
+    ] = "legacy"
     chunk_tokenizer: Literal["conservative_v1"] = "conservative_v1"
     child_min_tokens: int = Field(default=200, ge=1, le=4_000)
     child_target_tokens: int = Field(default=500, ge=1, le=8_000)

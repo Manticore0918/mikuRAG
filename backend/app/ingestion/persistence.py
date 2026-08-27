@@ -29,6 +29,7 @@ def build_hierarchical_chunk_models(
     hierarchy: ConstructedHierarchy,
     vectors: list[list[float]],
     embedding_model: str,
+    chunking_config_hash: str = "",
     provenance: Mapping[str, object] | None = None,
 ) -> ChunkModelBatch:
     if len(vectors) != len(hierarchy.children):
@@ -60,6 +61,7 @@ def build_hierarchical_chunk_models(
             content_type=parent.content_type,
             token_count=parent.token_count,
             chunking_version=parent.chunking_version,
+            chunking_config_hash=chunking_config_hash,
             content_hash=parent.content_hash,
             embedding=None,
             embedding_model=None,
@@ -88,6 +90,7 @@ def build_hierarchical_chunk_models(
             content_type=child.content_type,
             token_count=child.token_count,
             chunking_version=child.chunking_version,
+            chunking_config_hash=chunking_config_hash,
             content_hash=child.content_hash,
             embedding=vector,
             embedding_model=embedding_model,
@@ -107,7 +110,9 @@ def build_legacy_chunk_models(
     vectors: list[list[float]],
     embedding_model: str,
     tokenizer: Tokenizer,
+    chunking_config_hash: str = "",
     provenance: Mapping[str, object] | None = None,
+    chunking_version: str = "legacy",
 ) -> ChunkModelBatch:
     if len(vectors) != len(chunks):
         raise IngestionError("The embedding count does not match the legacy chunk count")
@@ -116,7 +121,9 @@ def build_legacy_chunk_models(
         start_page = _positive_locator_int(chunk.locator, "start_page", fallback_key="page")
         end_page = _positive_locator_int(chunk.locator, "end_page", fallback_key="page")
         heading_path = _heading_path(chunk.locator)
-        content_hash = _legacy_content_hash(chunk.text, chunk.locator)
+        content_hash = _legacy_content_hash(
+            chunk.text, chunk.locator, chunking_version=chunking_version
+        )
         children.append(
             Chunk(
                 id=_stable_chunk_id(document_id, "child", ordinal, content_hash),
@@ -131,7 +138,8 @@ def build_legacy_chunk_models(
                 heading_path=heading_path,
                 content_type=ChunkContentType.MIXED,
                 token_count=tokenizer.count(chunk.text),
-                chunking_version="legacy",
+                chunking_version=chunking_version,
+                chunking_config_hash=chunking_config_hash,
                 content_hash=content_hash,
                 embedding=vector,
                 embedding_model=embedding_model,
@@ -147,6 +155,7 @@ def build_summary_chunk_models(
     summaries: list[GeneratedSummary],
     vectors: list[list[float]],
     embedding_model: str,
+    chunking_config_hash: str = "",
     provenance: Mapping[str, object] | None = None,
 ) -> list[Chunk]:
     if len(vectors) != len(summaries):
@@ -195,6 +204,7 @@ def build_summary_chunk_models(
                 content_type=ChunkContentType.SUMMARY,
                 token_count=summary.token_count,
                 chunking_version=summary.chunking_version,
+                chunking_config_hash=chunking_config_hash,
                 content_hash=summary.content_hash,
                 embedding=vector,
                 embedding_model=embedding_model,
@@ -243,13 +253,18 @@ def _stable_chunk_id(
     return uuid.uuid5(document_id, f"{chunk_level}:{ordinal}:{content_hash}")
 
 
-def _legacy_content_hash(text: str, locator: dict[str, object]) -> str:
+def _legacy_content_hash(
+    text: str,
+    locator: dict[str, object],
+    *,
+    chunking_version: str = "legacy",
+) -> str:
     payload = json.dumps(
         {
             "text": text,
             "locator": locator,
             "chunk_level": "child",
-            "chunking_version": "legacy",
+            "chunking_version": chunking_version,
         },
         ensure_ascii=False,
         separators=(",", ":"),

@@ -14,14 +14,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.celery_app import celery_app
 from app.config import Settings, get_settings
-from app.ingestion.chunking import chunk_sections
+from app.ingestion.chunkers import build_chunker, is_hierarchical_chunker
 from app.ingestion.embeddings import EmbeddingMetrics, embed_texts
 from app.ingestion.errors import EmbeddingProviderError, IngestionError
 from app.ingestion.extraction import extract_document, parser_version_for_media_type
-from app.ingestion.hierarchical_chunking import (
-    HierarchicalChunkingConfig,
-    construct_hierarchy,
-)
+from app.ingestion.hierarchical_chunking import HierarchicalChunkingConfig
 from app.ingestion.normalization import normalize_document
 from app.ingestion.persistence import (
     build_hierarchical_chunk_models,
@@ -56,7 +53,12 @@ async def run_ingestion(
     ingestion_started = perf_counter()
     settings = get_settings()
     chunking_version = target_chunking_version or settings.chunking_version
-    if chunking_version not in {"legacy", "hierarchical_v1"}:
+    if chunking_version not in {
+        "legacy",
+        "legacy_char_v1",
+        "token_recursive_v1",
+        "hierarchical_v1",
+    }:
         raise ValueError("Unsupported chunking version")
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -66,6 +68,7 @@ async def run_ingestion(
     observation = {
         "document_id": str(document_id),
         "chunking_version": chunking_version,
+        "chunking_config_hash": "",
         "extracted_block_count": 0,
         "empty_page_count": 0,
         "ocr_fallback_page_count": 0,
@@ -182,19 +185,19 @@ async def run_ingestion(
         tokenizer = create_tokenizer(settings.chunk_tokenizer)
         provenance = chunk_provenance(document)
 
-        if chunking_version == "hierarchical_v1":
-            stage = "construct"
-            chunking_config = _hierarchical_config(settings, chunking_version)
-            stage_started = perf_counter()
-            hierarchy = await asyncio.to_thread(
-                construct_hierarchy,
-                normalized,
-                config=chunking_config,
-                tokenizer=tokenizer,
-            )
-            observation["chunk_construction_duration_ms"] = _duration_ms(
-                stage_started
-            )
+        stage = "construct"
+        chunker = build_chunker(
+            settings, version=chunking_version, tokenizer=tokenizer
+        )
+        chunking_config_hash = chunker.config.config_hash
+        stage_started = perf_counter()
+        chunking_result = await asyncio.to_thread(chunker.chunk, normalized)
+        observation["chunk_construction_duration_ms"] = _duration_ms(stage_started)
+        observation["chunking_config_hash"] = chunking_config_hash
+
+        if is_hierarchical_chunker(chunker):
+            hierarchy = chunking_result
+            chunking_config = chunker.hierarchical_config
             stage = "validate"
             await _update_progress(sessions, document_id, stage=stage, progress=55)
             stage_started = perf_counter()
@@ -250,6 +253,7 @@ async def run_ingestion(
                 vectors=vectors,
                 embedding_model=settings.embedding_model_id,
                 provenance=provenance,
+                chunking_config_hash=chunking_config_hash,
             )
             if summaries:
                 try:
@@ -266,6 +270,7 @@ async def run_ingestion(
                             summaries=summaries,
                             vectors=summary_vectors,
                             embedding_model=settings.embedding_model_id,
+                            chunking_config_hash=chunking_config_hash,
                             provenance=provenance,
                         ),
                     )
@@ -276,17 +281,7 @@ async def run_ingestion(
                         error,
                     )
         else:
-            stage = "construct"
-            stage_started = perf_counter()
-            chunks = await asyncio.to_thread(
-                chunk_sections,
-                normalized.sections,
-                settings.chunk_target_characters,
-                settings.chunk_overlap_characters,
-            )
-            observation["chunk_construction_duration_ms"] = _duration_ms(
-                stage_started
-            )
+            chunks = chunking_result
             if not chunks:
                 raise IngestionError("No searchable text could be produced from this Document")
             if len(chunks) > settings.max_document_chunks:
@@ -317,6 +312,8 @@ async def run_ingestion(
                 embedding_model=settings.embedding_model_id,
                 tokenizer=tokenizer,
                 provenance=provenance,
+                chunking_config_hash=chunking_config_hash,
+                chunking_version=chunker.profile,
             )
 
         child_token_counts = [

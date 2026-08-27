@@ -10,9 +10,12 @@ from app.ingestion.tasks import ingest_document, reindex_document_batch
 logger = logging.getLogger(__name__)
 
 
-def enqueue_ingestion(document_id: uuid.UUID) -> bool:
+def enqueue_ingestion(
+    document_id: uuid.UUID,
+    target_chunking_version: str | None = None,
+) -> bool:
     try:
-        ingest_document.delay(str(document_id))
+        ingest_document.delay(str(document_id), target_chunking_version)
         return True
     except (CeleryError, KombuOperationalError, RedisError, OSError):
         logger.error("Could not enqueue Document ingestion for %s", document_id)
