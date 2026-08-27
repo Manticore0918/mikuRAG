@@ -133,16 +133,20 @@ through the production embedding and hybrid retrieval path:
 
 The runner waits for real Celery Ingestion, writes `raw-run.json`, `report.json`,
 and `report.md` under `backend/evaluation/results/`, then deletes its Knowledge
-Base and managed source files. The evaluation CLI exposes two subcommands:
+Base and managed source files. The evaluation CLI exposes three subcommands:
 
-- `run` — execute one configuration (`--chunking-version`, `--answers`,
-  `--max-cases` for a CI smoke subset).
+- `run` — execute one configuration (`--chunking-version`, `--retrieval-mode`,
+  `--reranker`, `--answers`, `--max-cases` for a CI smoke subset).
 - `compare` — run every chunking profile against the same corpus and produce
   Recall/MRR/NDCG, latency, token, and storage results with a per-candidate
   acceptance gate on the untouched test split.
+- `ablation` — run the retrieval experiment modes (`vector`, `fts_baseline`,
+  `bm25`, `hybrid_rrf`, `hybrid_rrf_reranked`) against the frozen split and
+  publish a Recall@10/MRR@10/NDCG@10/p95/evidence-token table to
+  `backend/evaluation/results/ablation/<version>/<split>/`.
 
 See [`docs/EVALUATION-RUNNER.md`](./docs/EVALUATION-RUNNER.md) for the lifecycle,
-corpus schema, failure behavior, and artifact contract.
+retrieval modes, corpus schema, failure behavior, and artifact contract.
 
 ## Reproducible baseline demo
 

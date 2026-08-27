@@ -16,6 +16,10 @@ class EvaluationRunOptions:
     target_chunking_version: str | None = None
     bootstrap_samples: int = 2000
     bootstrap_seed: int | None = 0
+    retrieval_mode: str | None = None
+    reranker_provider: str | None = None
+    bm25_hybrid_enabled: bool | None = None
+    query_planning: bool = True
 
 
 @dataclass(frozen=True)
@@ -95,6 +99,10 @@ class EvaluationCaseRecord:
     split: str = "train"
     relevance_grades: dict[str, int] = field(default_factory=dict)
     filter_correct: bool | None = None
+    effective_query: str | None = None
+    history: tuple[dict[str, str], ...] = ()
+    rewrite_status: str | None = None
+    preserved_identifiers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

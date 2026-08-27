@@ -744,7 +744,13 @@
     {
       "case_id": "e-qpx731",
       "category": "exact_identifier",
-      "query": "What does error code QPX-731 mean?",
+      "query": "What about QPX-731?",
+      "history": [
+        {
+          "role": "user",
+          "content": "Which Atlas gateway error codes have documented recovery actions?"
+        }
+      ],
       "relevant_passage_ids": [
         "ops-qpx731"
       ],
@@ -915,7 +921,13 @@
     {
       "case_id": "s-idle-lock",
       "category": "semantic_paraphrase",
-      "query": "If an administrator steps away from the keyboard, when does the session get locked?",
+      "query": "And if the administrator steps away?",
+      "history": [
+        {
+          "role": "user",
+          "content": "We are reviewing the administrator session controls."
+        }
+      ],
       "relevant_passage_ids": [
         "sec-session"
       ],
@@ -958,7 +970,13 @@
     {
       "case_id": "s-leave-rollover",
       "category": "semantic_paraphrase",
-      "query": "What happens to unused annual leave above the carry-over cap?",
+      "query": "What happens above that cap?",
+      "history": [
+        {
+          "role": "user",
+          "content": "How much unused annual leave may an employee carry into the next year?"
+        }
+      ],
       "relevant_passage_ids": [
         "hr-leave-carryover"
       ],

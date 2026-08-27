@@ -9,6 +9,10 @@ The corpus is licensed under `CC0-1.0`; see `LICENSE.txt`. It contains Markdown,
 HTML, PDF, Python, and TypeScript sources so source-specific locator behavior is
 part of the evaluation rather than simulated in observations.
 
+Three reviewed cases include short synthetic Conversation histories so the
+original-versus-rewritten query ablation executes the real typed rewrite path;
+the remaining questions are standalone.
+
 `manifest.json` contains 64 reviewed questions. Each qrel points to stable
 passage and locator IDs whose `locator_match` must resolve against the real
 extractor output. The set deliberately includes unsupported and conflicting

@@ -38,6 +38,12 @@ class EvaluationCorpusDocument:
 
 
 @dataclass(frozen=True)
+class EvaluationHistoryMessage:
+    role: str
+    content: str
+
+
+@dataclass(frozen=True)
 class ExecutableEvaluationCase:
     case_id: str
     category: str
@@ -48,6 +54,7 @@ class ExecutableEvaluationCase:
     expected_answer_terms: tuple[str, ...]
     expects_supported_answer: bool
     filters: dict[str, tuple[str, ...]]
+    history: tuple[EvaluationHistoryMessage, ...] = ()
     split: str = "train"
     relevance_grades: dict[str, int] = field(default_factory=dict)
 
@@ -212,6 +219,7 @@ def _load_case(raw: object, *, schema_version: int) -> ExecutableEvaluationCase:
     if expects_supported and not relevant:
         raise ValueError(f"Supported case '{case_id}' requires relevant passages")
     filters = _load_filters(raw.get("filters", {}), case_id)
+    history = _load_history(raw.get("history", []), case_id)
     if schema_version == 2 and not isinstance(raw.get("reviewed"), bool):
         raise ValueError(f"Gold case '{case_id}' requires reviewed")
     if schema_version == 2 and raw.get("reviewed") is not True:
@@ -260,6 +268,7 @@ def _load_case(raw: object, *, schema_version: int) -> ExecutableEvaluationCase:
         expected_answer_terms=answer_terms,
         expects_supported_answer=expects_supported,
         filters=filters,
+        history=history,
         split=split,
         relevance_grades=relevance_grades,
     )
@@ -326,6 +335,22 @@ def _load_filters(value: object, case_id: str) -> dict[str, tuple[str, ...]]:
         key: _string_tuple(items, f"Case '{case_id}' filter {key}")
         for key, items in value.items()
     }
+
+
+def _load_history(value: object, case_id: str) -> tuple[EvaluationHistoryMessage, ...]:
+    if not isinstance(value, list) or len(value) > 12:
+        raise ValueError(f"Case '{case_id}' history must be a list of at most 12 messages")
+    messages: list[EvaluationHistoryMessage] = []
+    for item in value:
+        if not isinstance(item, dict) or item.get("role") not in {"user", "assistant"}:
+            raise ValueError(f"Case '{case_id}' history has an invalid role")
+        content = item.get("content")
+        if not isinstance(content, str) or not content.strip() or len(content) > 4_000:
+            raise ValueError(f"Case '{case_id}' history has invalid content")
+        messages.append(
+            EvaluationHistoryMessage(role=str(item["role"]), content=content.strip())
+        )
+    return tuple(messages)
 
 
 def _validate_case_filters(

@@ -84,6 +84,15 @@ def test_gold_cases_are_individually_marked_reviewed() -> None:
         assert case.get("reviewed") is True, case["case_id"]
 
 
+def test_gold_set_contains_reviewed_follow_up_rewrite_cases() -> None:
+    dataset = load_executable_dataset(GOLD)
+    follow_ups = [case for case in dataset.cases if case.history]
+
+    assert len(follow_ups) >= 3
+    assert {case.split for case in follow_ups} >= {"dev", "test"}
+    assert any("QPX-731" in case.query for case in follow_ups)
+
+
 def test_gold_category_coverage_matches_design() -> None:
     dataset = load_executable_dataset(GOLD)
     counts = {}

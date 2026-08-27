@@ -23,9 +23,11 @@ from app.evaluation.runner import (
     DatabaseEvaluationRuntime,
     _document_satisfies_filters,
     _filter_correct,
+    _retrieval_filters_for_case,
     _validate_options,
 )
 from app.ingestion.chunkers import build_chunker
+from app.rag.retrieval_types import RetrievalMode
 
 
 def _settings(**overrides) -> Settings:
@@ -132,10 +134,27 @@ def test_filter_correct_passes_when_evidence_satisfies_filters() -> None:
     db_id = uuid.uuid4()
     workspace = _workspace({"policy-doc": db_id})
     case = _case({"tags": ("policy",), "source_kinds": ("markdown",)})
-    assert (
-        _filter_correct(_dataset(document), workspace, case, (_evidence(db_id),))
-        is True
+    assert _filter_correct(_dataset(document), workspace, case, (_evidence(db_id),)) is True
+
+
+def test_case_filters_are_resolved_for_the_production_retriever() -> None:
+    db_id = uuid.uuid4()
+    workspace = _workspace({"policy-doc": db_id})
+    case = _case(
+        {
+            "document_ids": ("policy-doc",),
+            "tags": ("policy",),
+            "source_kinds": ("markdown",),
+            "languages": ("en",),
+        }
     )
+
+    filters = _retrieval_filters_for_case(case, workspace)
+
+    assert filters.document_ids == (db_id,)
+    assert filters.tags == ("policy",)
+    assert filters.source_kinds == ("markdown",)
+    assert filters.languages == ("en",)
 
 
 def test_filter_correct_passes_vacuously_with_empty_evidence() -> None:
@@ -241,5 +260,107 @@ def test_options_accept_alias_and_versioned_profiles(tmp_path: Path) -> None:
             dataset_path=tmp_path / "manifest.json",
             output_dir=tmp_path,
             target_chunking_version=profile,
+        )
+        _validate_options(options)
+
+
+def test_runtime_defaults_to_configured_retrieval_mode() -> None:
+    settings = _settings()
+    runtime = DatabaseEvaluationRuntime(settings=settings)
+
+    assert runtime.retrieval_mode == settings.retrieval_mode
+    assert runtime.effective_settings is settings
+    assert runtime.query_planning is True
+
+
+def test_runtime_accepts_retrieval_mode_and_reranker_overrides() -> None:
+    settings = _settings(retrieval_mode="hybrid_rrf")
+    runtime = DatabaseEvaluationRuntime(
+        settings=settings,
+        retrieval_mode="bm25",
+        reranker_provider="cross_encoder",
+        query_planning=False,
+    )
+
+    assert runtime.retrieval_mode == RetrievalMode.BM25
+    assert runtime.reranker.provider_name == "cross_encoder"
+    assert runtime.query_planning is False
+
+
+def test_runtime_bm25_hybrid_enabled_overrides_settings_copy() -> None:
+    settings = _settings(bm25_hybrid_enabled=False)
+    runtime = DatabaseEvaluationRuntime(
+        settings=settings,
+        bm25_hybrid_enabled=True,
+    )
+
+    assert runtime.effective_settings is not settings
+    assert runtime.effective_settings.bm25_hybrid_enabled is True
+    assert settings.bm25_hybrid_enabled is False
+
+
+def test_runtime_public_configuration_exposes_retrieval_keys() -> None:
+    settings = _settings(
+        retrieval_mode="hybrid_rrf_reranked",
+        retrieval_rrf_k=40,
+        retrieval_rrf_semantic_weight=1.5,
+        retrieval_rrf_lexical_weight=0.8,
+    )
+    runtime = DatabaseEvaluationRuntime(
+        settings=settings,
+        reranker_provider="cross_encoder",
+        bm25_hybrid_enabled=True,
+    )
+
+    config = runtime.public_configuration(include_answers=False)
+
+    assert config["retrieval_mode"] == "hybrid_rrf_reranked"
+    assert config["reranker_provider"] == "cross_encoder"
+    assert config["bm25_hybrid_enabled"] is True
+    assert config["query_planning"] is True
+    assert config["retrieval_rrf_k"] == 40
+    assert config["retrieval_rrf_semantic_weight"] == 1.5
+    assert config["retrieval_rrf_lexical_weight"] == 0.8
+
+
+def test_options_reject_unknown_retrieval_mode(tmp_path: Path) -> None:
+    options = EvaluationRunOptions(
+        dataset_path=tmp_path / "manifest.json",
+        output_dir=tmp_path,
+        retrieval_mode="not_a_mode",
+    )
+    with pytest.raises(ValueError, match="Unsupported retrieval mode"):
+        _validate_options(options)
+
+
+def test_options_reject_unknown_reranker_provider(tmp_path: Path) -> None:
+    options = EvaluationRunOptions(
+        dataset_path=tmp_path / "manifest.json",
+        output_dir=tmp_path,
+        reranker_provider="not_a_provider",
+    )
+    with pytest.raises(ValueError, match="Unsupported reranker provider"):
+        _validate_options(options)
+
+
+def test_options_accept_every_experiment_mode_and_reranker(tmp_path: Path) -> None:
+    for mode in (
+        "vector",
+        "fts_baseline",
+        "bm25",
+        "hybrid_rrf",
+        "hybrid_rrf_reranked",
+    ):
+        options = EvaluationRunOptions(
+            dataset_path=tmp_path / "manifest.json",
+            output_dir=tmp_path,
+            retrieval_mode=mode,
+        )
+        _validate_options(options)
+    for provider in ("deterministic", "cross_encoder"):
+        options = EvaluationRunOptions(
+            dataset_path=tmp_path / "manifest.json",
+            output_dir=tmp_path,
+            reranker_provider=provider,
         )
         _validate_options(options)

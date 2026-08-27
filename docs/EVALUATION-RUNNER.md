@@ -47,6 +47,43 @@ docker compose --profile tools run --rm evaluate python -m app.evaluation_cli ru
 manual debugging. The default cleanup makes repeat runs independent and prevents
 evaluation Documents from entering normal application retrieval.
 
+Checkpoint 3 adds the retrieval experiment knobs to `run` and `compare`:
+
+- `--retrieval-mode {vector,fts_baseline,bm25,hybrid_rrf,hybrid_rrf_reranked}`
+  selects which retrieval legs and post-processing run (default: the configured
+  `MIKURAG_RETRIEVAL_MODE`);
+- `--reranker {deterministic,cross_encoder}` selects the reranker used by
+  reranked modes (default: the configured provider);
+- `--bm25-hybrid-enabled` forces the pg_search BM25 leg into hybrid modes for
+  this run, even when `MIKURAG_BM25_HYBRID_ENABLED` is off (the production
+  default keeps BM25 off until the evaluation gate passes);
+- `--no-query-planning` disables the typed query plan per evaluation case (each
+  manifest case can carry a bounded synthetic Conversation history, so follow-up
+  cases exercise the production rewrite path and record the original/effective
+  query, rewrite status, preserved identifiers, and history in `raw-run.json`).
+
+### Retrieval modes
+
+Every mode pushes the authorization scope (Knowledge Base membership, Ready
+status, embedding model) and any metadata filters into the retrieval SQL before
+candidate limits, per the delivery rule that filters precede ranking:
+
+| Mode | Semantic leg | Lexical leg | Post-processing |
+| --- | --- | --- | --- |
+| `vector` | pgvector cosine | — | weighted RRF (single leg) |
+| `fts_baseline` | — | PostgreSQL FTS | weighted RRF (single leg) |
+| `bm25` | — | pg_search BM25 (FTS fallback) | weighted RRF (single leg) |
+| `hybrid_rrf` | pgvector cosine | FTS (BM25 when enabled) | weighted RRF |
+| `hybrid_rrf_reranked` | pgvector cosine | FTS (BM25 when enabled) | weighted RRF then reranker |
+
+The `bm25` mode falls back to PostgreSQL FTS when the `pg_search` extension or
+index is unavailable, unless `MIKURAG_BM25_FALLBACK_TO_FTS=false`. Hybrid modes
+keep the FTS baseline until `MIKURAG_BM25_HYBRID_ENABLED=true` (off by default
+per the delivery rule). The reranker is the local cross-encoder when
+`--reranker cross_encoder`; it reranks only the fused top-N under batch,
+timeout, and concurrency limits, and falls back to fused order on any failure,
+so a failing reranker never corrupts a run.
+
 ## Compare
 
 The `compare` subcommand is the checkpoint-2 exit gate: it runs every chunking
@@ -68,6 +105,39 @@ table). A candidate is `ready_for_default_rollout` only when no measured
 acceptance gate fails: cross-page context, citation ranges, composite retrieval
 quality improvement without component regression, the 1,500 ms retrieval p95,
 and the evidence-token budget.
+
+## Ablation
+
+The `ablation` subcommand is the checkpoint-3 mechanism for the component
+experiments: it runs every requested retrieval mode against the same corpus and
+publishes a per-config metrics table with real numbers (no placeholders):
+
+```powershell
+docker compose --profile tools run --rm evaluate python -m app.evaluation_cli ablation --dataset evaluation/corpus/gold_v1/manifest.json --split test
+```
+
+To ablate BM25 value vs the vector baseline with the learned reranker on top:
+
+```powershell
+docker compose --profile tools run --rm evaluate python -m app.evaluation_cli ablation --dataset evaluation/corpus/gold_v1/manifest.json --modes vector bm25 hybrid_rrf_reranked --reranker cross_encoder --split test
+```
+
+`ablation` accepts `--modes` (default: all five experiment modes), `--reranker`,
+`--bm25-hybrid-enabled`, `--split {all,train,dev,test}` (default `test`), and
+`--query-planning {both,on,off}` (default `both`) plus
+`--max-cases`/`--bootstrap-samples`/`--bootstrap-seed`. With `both`, every mode
+runs once with the typed rewrite plan and once with the original query. Each
+configuration runs through the full ingestion + retrieval lifecycle against the
+frozen corpus split, so the table reports Recall@10, MRR@10, NDCG@10, the
+retrieval p95 in milliseconds, and mean evidence tokens per config. It also
+records the effective lexical leg and reranker provider observed in the raw case
+records. A requested BM25 row that used FTS fallback, or a learned-reranker row
+that fell back to fused order, is marked invalid for headline comparison rather
+than being mislabeled as a successful component run. The result is written to
+`backend/evaluation/results/ablation/<version>/<split>/ablation.json` (machine
+readable) and `ablation.md` (a committed table). The output is the input to the
+component decision: enable only components that improve the frozen test set
+inside the latency and evidence-token budget.
 
 ## Artifacts
 

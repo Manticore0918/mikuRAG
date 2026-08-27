@@ -26,13 +26,10 @@ def build_aggregate_report(run: EvaluationRunRecord) -> dict[str, Any]:
         "document_count": len(run.documents),
         "ready_document_count": sum(item.status == "ready" for item in run.documents),
         "case_count": len(run.cases),
-        "retrieval_pass_rate": _mean(
-            [float(item.retrieval_passed) for item in run.cases]
-        ),
+        "retrieval_pass_rate": _mean([float(item.retrieval_passed) for item in run.cases]),
         "answer_case_count": sum(item.answer is not None for item in run.cases),
         "answer_failure_count": sum(
-            item.answer is not None and item.answer.safe_error is not None
-            for item in run.cases
+            item.answer is not None and item.answer.safe_error is not None for item in run.cases
         ),
         "knowledge_base_cleaned_up": run.knowledge_base_cleaned_up,
         "safe_error": run.safe_error,
@@ -55,17 +52,13 @@ def build_aggregate_report(run: EvaluationRunRecord) -> dict[str, Any]:
     report["metrics"] = asdict(evaluation_metrics(run.cases))
     splits = sorted({item.split for item in run.cases})
     report["by_split"] = {
-        split: asdict(
-            evaluation_metrics(tuple(item for item in run.cases if item.split == split))
-        )
+        split: asdict(evaluation_metrics(tuple(item for item in run.cases if item.split == split)))
         for split in splits
     }
     categories = sorted({item.category for item in run.cases})
     report["by_category"] = {
         category: asdict(
-            evaluation_metrics(
-                tuple(item for item in run.cases if item.category == category)
-            )
+            evaluation_metrics(tuple(item for item in run.cases if item.category == category))
         )
         for category in categories
     }
@@ -178,12 +171,17 @@ def _markdown_report(run: EvaluationRunRecord, aggregate: dict[str, Any]) -> str
             f"- Chunking version: `{configuration.get('chunking_version')}`",
             f"- Chunking config hash: `{configuration.get('chunking_config_hash')}`",
             f"- Embedding model: `{configuration.get('embedding_model_id')}`",
+            f"- Retrieval mode: `{configuration.get('retrieval_mode')}`",
+            f"- Reranker provider: `{configuration.get('reranker_provider')}`",
+            f"- Query planning: {'on' if configuration.get('query_planning') else 'off'}",
+            f"- BM25 hybrid: {'on' if configuration.get('bm25_hybrid_enabled') else 'off'}",
+            f"- RRF: k={configuration.get('retrieval_rrf_k')} "
+            f"semantic={configuration.get('retrieval_rrf_semantic_weight')} "
+            f"lexical={configuration.get('retrieval_rrf_lexical_weight')}",
             f"- Retrieval semantic candidates: "
             f"{configuration.get('retrieval_semantic_candidates')}",
-            f"- Retrieval lexical candidates: "
-            f"{configuration.get('retrieval_lexical_candidates')}",
-            f"- Evidence token budget: "
-            f"{configuration.get('retrieval_evidence_token_budget')}",
+            f"- Retrieval lexical candidates: {configuration.get('retrieval_lexical_candidates')}",
+            f"- Evidence token budget: {configuration.get('retrieval_evidence_token_budget')}",
             "",
         ]
     )

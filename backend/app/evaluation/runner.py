@@ -43,10 +43,18 @@ from app.ingestion.dispatch import enqueue_ingestion
 from app.ingestion.embeddings import embed_texts
 from app.ingestion.storage import remove_stored_file_sync, storage_path
 from app.models import Chunk, ChunkLevel, Document, DocumentStatus, KnowledgeBase
-from app.rag.generation import GenerationProviderError
-from app.rag.grounding import RenderedAnswer
+from app.rag.generation import GenerationProviderError, complete_json
+from app.rag.grounding import HistoryMessage, RenderedAnswer
+from app.rag.query_plan import build_query_plan
+from app.rag.reranking import build_reranker
 from app.rag.retrieval import retrieve_evidence
-from app.rag.retrieval_types import Evidence, RetrievalMetrics
+from app.rag.retrieval_types import (
+    Evidence,
+    QueryPlan,
+    RetrievalFilters,
+    RetrievalMetrics,
+    RetrievalMode,
+)
 from app.rag.service import INSUFFICIENT_EVIDENCE, generate_grounded_answer
 
 logger = logging.getLogger(__name__)
@@ -114,12 +122,28 @@ class DatabaseEvaluationRuntime:
         enqueuer: Callable[[uuid.UUID, str | None], bool] = enqueue_ingestion,
         sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
         target_chunking_version: str | None = None,
+        retrieval_mode: str | None = None,
+        reranker_provider: str | None = None,
+        bm25_hybrid_enabled: bool | None = None,
+        query_planning: bool = True,
     ) -> None:
         self.settings = settings or get_settings()
         self.sessions = sessions
         self.enqueuer = enqueuer
         self.sleeper = sleeper
         self.target_chunking_version = target_chunking_version
+        self.retrieval_mode = (
+            RetrievalMode(retrieval_mode)
+            if retrieval_mode is not None
+            else self.settings.retrieval_mode
+        )
+        self.reranker = build_reranker(reranker_provider, self.settings)
+        self.effective_settings = (
+            self.settings.model_copy(update={"bm25_hybrid_enabled": bm25_hybrid_enabled})
+            if bm25_hybrid_enabled is not None
+            else self.settings
+        )
+        self.query_planning = query_planning
         self._ingestion_started = 0.0
         self._ingestion_duration_ms: float | None = None
         self._embedding_input_count = 0
@@ -127,27 +151,28 @@ class DatabaseEvaluationRuntime:
         self._storage_estimate_bytes = 0
 
     def public_configuration(self, *, include_answers: bool) -> dict[str, object]:
-        profile = self.target_chunking_version or self.settings.chunking_version
-        chunker = build_chunker(self.settings, version=profile)
+        settings = self.effective_settings
+        profile = self.target_chunking_version or settings.chunking_version
+        chunker = build_chunker(settings, version=profile)
         return {
             "chunking_version": profile,
             "chunking_config_hash": chunker.config.config_hash,
-            "chunk_tokenizer": self.settings.chunk_tokenizer,
-            "hierarchical_retrieval_enabled": (
-                self.settings.hierarchical_retrieval_enabled
-            ),
-            "embedding_model_id": self.settings.embedding_model_id,
-            "generation_model_id": (
-                self.settings.generation_model_id if include_answers else None
-            ),
-            "retrieval_semantic_candidates": (
-                self.settings.retrieval_semantic_candidates
-            ),
-            "retrieval_lexical_candidates": self.settings.retrieval_lexical_candidates,
-            "retrieval_evidence_limit": self.settings.retrieval_evidence_limit,
-            "retrieval_evidence_token_budget": (
-                self.settings.retrieval_evidence_token_budget
-            ),
+            "chunk_tokenizer": settings.chunk_tokenizer,
+            "hierarchical_retrieval_enabled": (settings.hierarchical_retrieval_enabled),
+            "embedding_model_id": settings.embedding_model_id,
+            "generation_model_id": (settings.generation_model_id if include_answers else None),
+            "retrieval_mode": self.retrieval_mode.value,
+            "retrieval_rrf_k": settings.retrieval_rrf_k,
+            "retrieval_rrf_semantic_weight": settings.retrieval_rrf_semantic_weight,
+            "retrieval_rrf_lexical_weight": settings.retrieval_rrf_lexical_weight,
+            "reranker_provider": getattr(self.reranker, "provider_name", "deterministic"),
+            "bm25_hybrid_enabled": settings.bm25_hybrid_enabled,
+            "query_planning": self.query_planning,
+            "retrieval_semantic_candidates": (settings.retrieval_semantic_candidates),
+            "retrieval_lexical_candidates": settings.retrieval_lexical_candidates,
+            "retrieval_rerank_candidates": settings.retrieval_rerank_candidates,
+            "retrieval_evidence_limit": settings.retrieval_evidence_limit,
+            "retrieval_evidence_token_budget": (settings.retrieval_evidence_token_budget),
         }
 
     async def create_workspace(
@@ -158,9 +183,7 @@ class DatabaseEvaluationRuntime:
         name = _knowledge_base_name(dataset.version, run_id)
         knowledge_base = KnowledgeBase(
             name=name,
-            description=(
-                f"Isolated executable evaluation corpus {dataset.version}; run {run_id}."
-            ),
+            description=(f"Isolated executable evaluation corpus {dataset.version}; run {run_id}."),
         )
         async with self.sessions() as session:
             session.add(knowledge_base)
@@ -173,17 +196,13 @@ class DatabaseEvaluationRuntime:
             document_ids={},
             storage_keys=(),
         )
-        self._storage_estimate_bytes = sum(
-            item.size_bytes for item in dataset.documents
-        )
+        self._storage_estimate_bytes = sum(item.size_bytes for item in dataset.documents)
         storage_keys: list[str] = []
         document_ids: dict[str, uuid.UUID] = {}
         try:
             async with self.sessions() as session:
                 for corpus_document in dataset.documents:
-                    storage_key = (
-                        f"evaluation/{run_id}/{uuid.uuid4().hex}"
-                    )
+                    storage_key = f"evaluation/{run_id}/{uuid.uuid4().hex}"
                     destination = storage_path(self.settings.upload_dir, storage_key)
                     await asyncio.to_thread(destination.parent.mkdir, parents=True, exist_ok=True)
                     await asyncio.to_thread(
@@ -216,8 +235,7 @@ class DatabaseEvaluationRuntime:
                         tags=["evaluation", dataset.version, *corpus_document.tags],
                         source_uri=corpus_document.source_uri,
                         source_path=(
-                            f"evaluation/{dataset.version}/"
-                            f"{corpus_document.relative_path}"
+                            f"evaluation/{dataset.version}/{corpus_document.relative_path}"
                         ),
                         source_metadata=source_metadata,
                         ingestion_stage="queued",
@@ -279,15 +297,9 @@ class DatabaseEvaluationRuntime:
                         documents=records,
                     )
                 await self._bind_gold_passages(workspace, dataset)
-                self._ingestion_duration_ms = (
-                    perf_counter() - self._ingestion_started
-                ) * 1_000
-                self._total_chunk_count = sum(
-                    item.chunk_count for item in records
-                )
-                self._embedding_input_count = await self._count_embedding_inputs(
-                    workspace
-                )
+                self._ingestion_duration_ms = (perf_counter() - self._ingestion_started) * 1_000
+                self._total_chunk_count = sum(item.chunk_count for item in records)
+                self._embedding_input_count = await self._count_embedding_inputs(workspace)
                 return records
             if asyncio.get_running_loop().time() >= deadline:
                 records = await self._document_records(workspace, dataset, documents)
@@ -306,30 +318,48 @@ class DatabaseEvaluationRuntime:
         include_answers: bool,
     ) -> EvaluationCaseRecord:
         case_started = perf_counter()
-        vector = (await embed_texts([case.query], settings=self.settings))[0]
         metrics = RetrievalMetrics()
+        query_plan: QueryPlan | None = None
+        history = [
+            HistoryMessage(role=item.role, content=item.content)
+            for item in case.history
+        ]
+        if self.query_planning:
+            plan, _ = await build_query_plan(
+                case.query,
+                history,
+                self.effective_settings,
+                complete=complete_json,
+                metrics=metrics,
+            )
+            query_plan = plan
+        query = query_plan.effective_query if query_plan is not None else case.query
+        vector = (await embed_texts([query], settings=self.effective_settings))[0]
+        retrieval_filters = _retrieval_filters_for_case(case, workspace)
         async with self.sessions() as session:
             evidence, sufficient = await retrieve_evidence(
                 session,
                 workspace.knowledge_base_id,
-                case.query,
+                query,
                 vector,
-                self.settings,
+                self.effective_settings,
+                mode=self.retrieval_mode,
+                reranker=self.reranker,
+                filters=retrieval_filters,
+                query_plan=query_plan,
                 metrics=metrics,
             )
         evidence_records = tuple(_evidence_record(item) for item in evidence)
-        filter_correct = _filter_correct(
-            dataset, workspace, case, evidence_records
-        )
+        filter_correct = _filter_correct(dataset, workspace, case, evidence_records)
         passage_ids = _ordered_unique(item.passage_id for item in evidence_records)
         citation_pages = _citation_pages(evidence)
         retrieval_passed = (
             sufficient and set(case.required_passage_ids) <= set(passage_ids)
             if case.expects_supported_answer
+            # Conflicting-evidence cases (non-supported with required passages)
+            # pass retrieval only when the retriever surfaced both sides of the
+            # conflict; sufficient is expected here because both are strong hits.
             else (
-                # Conflicting-evidence cases (non-supported with required passages)
-                # pass retrieval only when the retriever surfaced both sides of the
-                # conflict; sufficient is expected here because both are strong hits.
                 set(case.required_passage_ids) <= set(passage_ids)
                 if case.required_passage_ids
                 else not sufficient
@@ -342,7 +372,7 @@ class DatabaseEvaluationRuntime:
                 if sufficient:
                     rendered, usage = await generate_grounded_answer(
                         case.query,
-                        [],
+                        history,
                         evidence,
                     )
                 else:
@@ -417,6 +447,15 @@ class DatabaseEvaluationRuntime:
             split=case.split,
             relevance_grades=dict(case.relevance_grades),
             filter_correct=filter_correct,
+            effective_query=query,
+            history=tuple(
+                {"role": item.role, "content": item.content}
+                for item in case.history
+            ),
+            rewrite_status=(query_plan.status.value if query_plan is not None else None),
+            preserved_identifiers=(
+                query_plan.preserved_identifiers if query_plan is not None else ()
+            ),
         )
 
     async def cleanup(self, workspace: EvaluationWorkspace) -> None:
@@ -439,9 +478,7 @@ class DatabaseEvaluationRuntime:
         async with self.sessions() as session:
             return list(
                 await session.scalars(
-                    select(Document).where(
-                        Document.id.in_(tuple(workspace.document_ids.values()))
-                    )
+                    select(Document).where(Document.id.in_(tuple(workspace.document_ids.values())))
                 )
             )
 
@@ -487,8 +524,7 @@ class DatabaseEvaluationRuntime:
                         size_bytes=document.size_bytes or 0,
                         chunking_config_hash=(
                             str(chunking_config_hash)
-                            if isinstance(chunking_config_hash, str)
-                            and chunking_config_hash
+                            if isinstance(chunking_config_hash, str) and chunking_config_hash
                             else None
                         ),
                     )
@@ -511,9 +547,7 @@ class DatabaseEvaluationRuntime:
                     select(func.count())
                     .select_from(Chunk)
                     .where(
-                        Chunk.document_id.in_(
-                            tuple(workspace.document_ids.values())
-                        ),
+                        Chunk.document_id.in_(tuple(workspace.document_ids.values())),
                         Chunk.embedding_model.is_not(None),
                     )
                 )
@@ -592,7 +626,11 @@ async def execute_evaluation(
     _validate_options(options)
     dataset = dataset or load_executable_dataset(options.dataset_path)
     active_runtime = runtime or DatabaseEvaluationRuntime(
-        target_chunking_version=options.target_chunking_version
+        target_chunking_version=options.target_chunking_version,
+        retrieval_mode=options.retrieval_mode,
+        reranker_provider=options.reranker_provider,
+        bm25_hybrid_enabled=options.bm25_hybrid_enabled,
+        query_planning=options.query_planning,
     )
     run_id = options.run_id or _new_run_id()
     started_at = datetime.now(UTC)
@@ -651,21 +689,15 @@ async def execute_evaluation(
                 logger.exception("Could not clean up the evaluation Knowledge Base")
                 caught_error = caught_error or cleanup_error
                 cleanup_message = "The isolated evaluation Knowledge Base could not be cleaned up"
-                safe_error = (
-                    f"{safe_error}; {cleanup_message}" if safe_error else cleanup_message
-                )
+                safe_error = f"{safe_error}; {cleanup_message}" if safe_error else cleanup_message
 
     configuration = dict(
-        active_runtime.public_configuration(
-            include_answers=options.include_answers
-        )
+        active_runtime.public_configuration(include_answers=options.include_answers)
     )
     configuration["bootstrap_samples"] = options.bootstrap_samples
     configuration["bootstrap_seed"] = options.bootstrap_seed
     raw_config_hash = configuration.get("chunking_config_hash")
-    chunking_config_hash = (
-        str(raw_config_hash) if isinstance(raw_config_hash, str) else None
-    )
+    chunking_config_hash = str(raw_config_hash) if isinstance(raw_config_hash, str) else None
     run = EvaluationRunRecord(
         schema_version=1,
         run_id=run_id,
@@ -687,13 +719,9 @@ async def execute_evaluation(
             if ingestion_stats.get("ingestion_duration_ms") is not None
             else None
         ),
-        embedding_input_count=int(
-            ingestion_stats.get("embedding_input_count") or 0
-        ),
+        embedding_input_count=int(ingestion_stats.get("embedding_input_count") or 0),
         total_chunk_count=int(ingestion_stats.get("total_chunk_count") or 0),
-        storage_estimate_bytes=int(
-            ingestion_stats.get("storage_estimate_bytes") or 0
-        ),
+        storage_estimate_bytes=int(ingestion_stats.get("storage_estimate_bytes") or 0),
     )
     aggregate = build_aggregate_report(run)
     artifacts = write_evaluation_artifacts(options.output_dir, run, aggregate)
@@ -783,35 +811,48 @@ def _filter_correct(
     if not case.filters:
         return None
     db_id_to_corpus_id = {
-        str(document_id): corpus_id
-        for corpus_id, document_id in workspace.document_ids.items()
+        str(document_id): corpus_id for corpus_id, document_id in workspace.document_ids.items()
     }
     corpus_documents = {item.document_id: item for item in dataset.documents}
     for record in evidence_records:
         corpus_id = db_id_to_corpus_id.get(record.document_id)
         document = corpus_documents.get(corpus_id) if corpus_id else None
-        if document is None or not _document_satisfies_filters(
-            document, case.filters
-        ):
+        if document is None or not _document_satisfies_filters(document, case.filters):
             return False
     return True
+
+
+def _retrieval_filters_for_case(
+    case: ExecutableEvaluationCase,
+    workspace: EvaluationWorkspace,
+) -> RetrievalFilters:
+    """Resolve corpus-level filters to the database identifiers used by retrieval.
+
+    Evaluation manifests intentionally use stable corpus Document IDs. Each isolated
+    run receives fresh database UUIDs, so Document filters must be translated through
+    the run workspace before the production retriever is called.
+    """
+    document_ids = tuple(
+        workspace.document_ids[corpus_id]
+        for corpus_id in case.filters.get("document_ids", ())
+    )
+    return RetrievalFilters(
+        document_ids=document_ids,
+        tags=case.filters.get("tags", ()),
+        source_kinds=case.filters.get("source_kinds", ()),
+        languages=case.filters.get("languages", ()),
+    )
 
 
 def _document_satisfies_filters(
     document: EvaluationCorpusDocument,
     filters: dict[str, tuple[str, ...]],
 ) -> bool:
-    if (
-        "document_ids" in filters
-        and document.document_id not in filters["document_ids"]
-    ):
+    if "document_ids" in filters and document.document_id not in filters["document_ids"]:
         return False
     if "tags" in filters and not set(filters["tags"]) <= set(document.tags):
         return False
-    if (
-        "source_kinds" in filters
-        and document.source_kind not in filters["source_kinds"]
-    ):
+    if "source_kinds" in filters and document.source_kind not in filters["source_kinds"]:
         return False
     if "languages" in filters and document.language not in filters["languages"]:
         return False
@@ -863,12 +904,19 @@ def _validate_options(options: EvaluationRunOptions) -> None:
         raise ValueError("run_id must contain 4-80 letters, numbers, underscores, or hyphens")
     if (
         options.target_chunking_version is not None
-        and canonical_profile(options.target_chunking_version)
-        not in _CHUNKER_PROFILES
+        and canonical_profile(options.target_chunking_version) not in _CHUNKER_PROFILES
     ):
-        raise ValueError(
-            f"Unsupported chunking profile: {options.target_chunking_version}"
-        )
+        raise ValueError(f"Unsupported chunking profile: {options.target_chunking_version}")
+    if options.retrieval_mode is not None:
+        try:
+            RetrievalMode(options.retrieval_mode)
+        except ValueError as error:
+            raise ValueError(f"Unsupported retrieval mode: {options.retrieval_mode}") from error
+    if options.reranker_provider is not None and options.reranker_provider not in {
+        "deterministic",
+        "cross_encoder",
+    }:
+        raise ValueError(f"Unsupported reranker provider: {options.reranker_provider}")
 
 
 def _knowledge_base_name(version: str, run_id: str) -> str:
