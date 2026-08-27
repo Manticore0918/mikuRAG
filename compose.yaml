@@ -73,6 +73,10 @@ services:
     # dialect are validated by the scripts/spike_pg_search scripts (ADR-0005);
     # stock pgvector remains usable because migration 0010 is guarded.
     image: ${POSTGRES_IMAGE:-paradedb/paradedb:0.24.1-pg16}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=${POSTGRES_SHARED_PRELOAD_LIBRARIES-pg_search}
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mikurag}
       POSTGRES_USER: ${POSTGRES_USER:-mikurag}
@@ -100,7 +104,7 @@ services:
 
   migrate:
     build: ./backend
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "app.migration_cli"]
     environment: *backend-environment
     depends_on:
       postgres:
