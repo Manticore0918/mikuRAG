@@ -11,6 +11,8 @@ import {
   type Conversation,
   type ConversationDetail,
   type KnowledgeBase,
+  type RetrievalDocument,
+  type RetrievalFilters,
   type ServerEvent,
 } from './api'
 import { formatCitationLocator } from './citationFormatting'
@@ -67,12 +69,32 @@ export default function ChatPanel({ knowledgeBases, initialConversationId, onErr
   const [question, setQuestion] = useState('')
   const [stage, setStage] = useState('')
   const [sending, setSending] = useState(false)
+  const [retrievalDocumentState, setRetrievalDocumentState] = useState<{
+    knowledgeBaseId: string
+    documents: RetrievalDocument[]
+  }>({ knowledgeBaseId: '', documents: [] })
+  const [filterDocumentIds, setFilterDocumentIds] = useState<string[]>([])
+  const [filterTags, setFilterTags] = useState('')
+  const [filterSourceKind, setFilterSourceKind] = useState('')
+  const [filterLanguage, setFilterLanguage] = useState('')
+  const [filterAfter, setFilterAfter] = useState('')
+  const [filterBefore, setFilterBefore] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
 
   const activeSummary = useMemo(
     () => conversations.find((conversation) => conversation.id === activeId),
     [activeId, conversations],
   )
+  const filterKnowledgeBaseId = active?.knowledge_base_id
+    ?? activeSummary?.knowledge_base_id
+    ?? selectedKnowledgeBase
+  const retrievalDocuments = retrievalDocumentState.knowledgeBaseId === filterKnowledgeBaseId
+    ? retrievalDocumentState.documents
+    : []
+  const effectiveFilterDocumentIds = retrievalDocumentState.knowledgeBaseId
+    === filterKnowledgeBaseId
+    ? filterDocumentIds
+    : []
 
   async function refreshConversations() {
     const items = await request<Conversation[]>('/conversations')
@@ -98,6 +120,26 @@ export default function ChatPanel({ knowledgeBases, initialConversationId, onErr
       })
     return () => { mounted = false }
   }, [activeId, onError])
+
+  useEffect(() => {
+    if (!filterKnowledgeBaseId) return
+    let mounted = true
+    void request<RetrievalDocument[]>(
+      `/knowledge-bases/${filterKnowledgeBaseId}/retrieval-documents`,
+    ).then((documents) => {
+      if (mounted) {
+        setRetrievalDocumentState({ knowledgeBaseId: filterKnowledgeBaseId, documents })
+        setFilterDocumentIds([])
+      }
+    }).catch((error) => {
+      if (mounted) {
+        setRetrievalDocumentState({ knowledgeBaseId: filterKnowledgeBaseId, documents: [] })
+        setFilterDocumentIds([])
+        onError(error instanceof Error ? error.message : 'Unable to load retrieval filters')
+      }
+    })
+    return () => { mounted = false }
+  }, [filterKnowledgeBaseId, onError])
 
   useEffect(() => {
     if (typeof endRef.current?.scrollIntoView === 'function') {
@@ -187,8 +229,22 @@ export default function ChatPanel({ knowledgeBases, initialConversationId, onErr
         { id: `user-${Date.now()}`, sequence: Date.now(), role: 'user', status: 'complete', content: text, created_at: now, citations: [] },
         { id: `assistant-${Date.now()}`, sequence: Date.now() + 1, role: 'assistant', status: 'streaming', content: '', created_at: now, citations: [] },
       ]
+      const filters: RetrievalFilters = {
+        document_ids: effectiveFilterDocumentIds,
+        tags: filterTags.split(',').map((item) => item.trim()).filter(Boolean),
+        source_kinds: filterSourceKind
+          ? [filterSourceKind as RetrievalDocument['source_kind']]
+          : [],
+        languages: filterLanguage ? [filterLanguage.trim().toLowerCase()] : [],
+        ingested_after: filterAfter ? new Date(`${filterAfter}T00:00:00Z`).toISOString() : null,
+        ingested_before: filterBefore ? new Date(`${filterBefore}T23:59:59.999Z`).toISOString() : null,
+      }
       setActive((current) => current && ({ ...current, messages: [...current.messages, ...optimistic] }))
-      await streamMutation(`/conversations/${conversationId}/turns`, { question: text }, applyEvent)
+      await streamMutation(
+        `/conversations/${conversationId}/turns`,
+        { question: text, filters },
+        applyEvent,
+      )
       await refreshConversations()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to send question'
@@ -256,8 +312,46 @@ export default function ChatPanel({ knowledgeBases, initialConversationId, onErr
           <div ref={endRef} />
         </div>
         <form className="chat-composer" onSubmit={(event) => void sendQuestion(event)}>
+          <details className="retrieval-filters">
+            <summary>Retrieval filters</summary>
+            <div className="retrieval-filter-grid">
+              <label>Documents
+                <select
+                  aria-label="Filter Documents"
+                  multiple
+                  value={effectiveFilterDocumentIds}
+                  onChange={(event) => setFilterDocumentIds(
+                    Array.from(event.target.selectedOptions, (option) => option.value),
+                  )}
+                >
+                  {retrievalDocuments.map((document) => (
+                    <option key={document.id} value={document.id}>{document.original_name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>Tags
+                <input value={filterTags} onChange={(event) => setFilterTags(event.target.value)} placeholder="policy, security" />
+              </label>
+              <label>Source type
+                <select value={filterSourceKind} onChange={(event) => setFilterSourceKind(event.target.value)}>
+                  <option value="">Any source type</option>
+                  {['pdf', 'docx', 'text', 'markdown', 'html', 'code'].map((kind) => <option key={kind} value={kind}>{kind}</option>)}
+                </select>
+              </label>
+              <label>Language
+                <input value={filterLanguage} onChange={(event) => setFilterLanguage(event.target.value)} placeholder="en or python" />
+              </label>
+              <label>Ingested after
+                <input type="date" value={filterAfter} onChange={(event) => setFilterAfter(event.target.value)} />
+              </label>
+              <label>Ingested before
+                <input type="date" value={filterBefore} onChange={(event) => setFilterBefore(event.target.value)} />
+              </label>
+            </div>
+            <p>Filters are applied inside the authorized Knowledge Base before ranking.</p>
+          </details>
           <label htmlFor="chat-question">Ask a question</label>
-          <div><textarea id="chat-question" maxLength={4000} placeholder="What do the Documents say about…" value={question} onChange={(event) => setQuestion(event.target.value)} disabled={sending || (!activeId && !selectedKnowledgeBase)} /><button className="primary" disabled={sending || !question.trim()} type="submit">{sending ? 'Working…' : 'Send'}</button></div>
+          <div className="composer-row"><textarea id="chat-question" maxLength={4000} placeholder="What do the Documents say about…" value={question} onChange={(event) => setQuestion(event.target.value)} disabled={sending || (!activeId && !selectedKnowledgeBase)} /><button className="primary" disabled={sending || !question.trim()} type="submit">{sending ? 'Working…' : 'Send'}</button></div>
           <p>Conversation history resolves references only. Fresh Document retrieval is required for every answer.</p>
         </form>
       </section>

@@ -288,7 +288,12 @@ async def create_turn(
         ) from error
     await session.close()
     return StreamingResponse(
-        turn_events(conversation.id, user_message.id, assistant_message.id),
+        turn_events(
+            conversation.id,
+            user_message.id,
+            assistant_message.id,
+            filters=payload.filters.to_domain(),
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

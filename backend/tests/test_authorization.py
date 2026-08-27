@@ -10,7 +10,7 @@ from app.api.admin import delete_knowledge_base
 from app.database import get_session
 from app.dependencies import ensure_knowledge_base_access, get_current_user
 from app.main import app
-from app.models import KnowledgeBase, User
+from app.models import Document, DocumentStatus, KnowledgeBase, SourceKind, User
 from app.security import create_session_token
 
 
@@ -117,6 +117,75 @@ async def test_cross_knowledge_base_request_returns_not_found() -> None:
             response = await client.get(f"/api/v1/knowledge-bases/{uuid.uuid4()}")
         assert response.status_code == 404
         assert response.json() == {"detail": "Knowledge Base not found"}
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_retrieval_document_options_require_knowledge_base_access() -> None:
+    user = make_user(administrator=False)
+
+    async def override_session() -> AsyncIterator[FakeSession]:
+        yield FakeSession(scalar_value=False)
+
+    async def override_user() -> User:
+        return user
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_current_user] = override_user
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get(
+                f"/api/v1/knowledge-bases/{uuid.uuid4()}/retrieval-documents"
+            )
+        assert response.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_authorized_user_can_list_safe_retrieval_document_metadata() -> None:
+    user = make_user(administrator=False)
+    knowledge_base_id = uuid.uuid4()
+    document = Document(
+        id=uuid.uuid4(),
+        knowledge_base_id=knowledge_base_id,
+        original_name="policy.md",
+        media_type="text/markdown",
+        size_bytes=100,
+        status=DocumentStatus.READY,
+        source_kind=SourceKind.MARKDOWN,
+        language="en",
+        tags=["policy"],
+        storage_key="test/policy.md",
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    async def override_session() -> AsyncIterator[FakeSession]:
+        yield FakeSession(scalar_value=True, rows=[document])
+
+    async def override_user() -> User:
+        return user
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_current_user] = override_user
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get(
+                f"/api/v1/knowledge-bases/{knowledge_base_id}/retrieval-documents"
+            )
+        assert response.status_code == 200
+        assert response.json() == [
+            {
+                "id": str(document.id),
+                "original_name": "policy.md",
+                "source_kind": "markdown",
+                "language": "en",
+                "tags": ["policy"],
+                "ingested_at": document.created_at.isoformat().replace("+00:00", "Z"),
+            }
+        ]
     finally:
         app.dependency_overrides.clear()
 

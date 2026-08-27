@@ -496,6 +496,29 @@ async def test_filters_are_pushed_into_every_leg_before_ranking(
 
 
 @pytest.mark.asyncio
+async def test_tag_filters_are_case_insensitive_and_require_each_tag() -> None:
+    session = FakeSession()
+    await retrieve_evidence(
+        session,
+        uuid.uuid4(),
+        "query",
+        [0.1] * 8,
+        settings(),
+        mode=RetrievalMode.VECTOR,
+        filters=RetrievalFilters(tags=("Policy", "SECURITY")),
+    )
+
+    statement = selects(session)[0]
+    compiled = str(statement.compile())
+    values = compiled_values(statement)
+
+    assert compiled.count("EXISTS") == 2
+    assert "unnest" in compiled
+    assert "policy" in values
+    assert "security" in values
+
+
+@pytest.mark.asyncio
 async def test_empty_filters_leave_no_filter_predicates() -> None:
     document_id = uuid.uuid4()
     session = FakeSession()

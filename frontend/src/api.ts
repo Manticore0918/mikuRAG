@@ -108,6 +108,24 @@ export type ChatMessage = {
 
 export type ConversationDetail = Conversation & { messages: ChatMessage[] }
 
+export type RetrievalDocument = {
+  id: string
+  original_name: string
+  source_kind: DocumentRecord['source_kind']
+  language: string | null
+  tags: string[]
+  ingested_at: string
+}
+
+export type RetrievalFilters = {
+  document_ids: string[]
+  tags: string[]
+  source_kinds: DocumentRecord['source_kind'][]
+  languages: string[]
+  ingested_after: string | null
+  ingested_before: string | null
+}
+
 export type ServerEvent = {
   event: string
   data: unknown

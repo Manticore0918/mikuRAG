@@ -146,9 +146,14 @@ td small { margin-top: .25rem; color: #74727f; }
 .citation-meta a { color: #6ce5d0; }
 .generation-stage { color: #8debd9; font-size: .78rem; }
 .chat-composer { width: min(100%, 58rem); display: grid; gap: .45rem; margin: 0 auto; padding: 1rem clamp(1rem, 4vw, 2.5rem) 1.2rem; }
-.chat-composer > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .7rem; }
+.chat-composer > .composer-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: .7rem; }
 .chat-composer textarea { min-height: 3.2rem; max-height: 11rem; }
 .chat-composer > p { margin: 0; color: #666572; font-size: .68rem; }
+.retrieval-filters { padding: .7rem .8rem; color: #aaa8b5; background: #121520; border: 1px solid #2a2e3d; border-radius: .7rem; }
+.retrieval-filters summary { cursor: pointer; color: #d3d1dc; font-size: .78rem; font-weight: 750; }
+.retrieval-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; padding-top: .8rem; }
+.retrieval-filter-grid select[multiple] { min-height: 5.6rem; padding-block: .35rem; }
+.retrieval-filters p { margin: .7rem 0 0; color: #666572; font-size: .68rem; }
 
 @media (max-width: 800px) {
   .auth-layout { grid-template-columns: 1fr; }
@@ -168,4 +173,5 @@ td small { margin-top: .25rem; color: #74727f; }
   .conversation-sidebar { max-height: 19rem; border-right: 0; border-bottom: 1px solid #252936; }
   .chat-main { min-height: 40rem; }
   .message-feed { min-height: 24rem; max-height: 60vh; }
+  .retrieval-filter-grid { grid-template-columns: 1fr; }
 }

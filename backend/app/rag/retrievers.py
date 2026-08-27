@@ -11,7 +11,7 @@ import logging
 import uuid
 from typing import Any, Protocol
 
-from sqlalchemy import func, literal_column, select, text
+from sqlalchemy import exists, func, literal_column, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
@@ -40,7 +40,19 @@ def filters_sql(filters: RetrievalFilters | None) -> tuple[Any, ...]:
     if filters.document_ids:
         predicates.append(Document.id.in_(filters.document_ids))
     if filters.tags:
-        predicates.append(Document.tags.contains(list(filters.tags)))
+        document_tags = (
+            func.unnest(Document.tags)
+            .table_valued("tag")
+            .render_derived(name="document_tag")
+        )
+        predicates.extend(
+            exists(
+                select(1)
+                .select_from(document_tags)
+                .where(func.lower(document_tags.c.tag) == tag.casefold())
+            )
+            for tag in filters.tags
+        )
     if filters.source_kinds:
         predicates.append(Document.source_kind.in_(filters.source_kinds))
     if filters.languages:

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 
 import ChatPanel from './ChatPanel'
@@ -128,4 +128,73 @@ test('renders an insufficient-evidence answer without a Citation list', async ()
 
   expect(await screen.findByText(/cannot answer reliably/)).toBeInTheDocument()
   expect(view.container.querySelector('[aria-label="Citations"]')).toBeNull()
+})
+
+
+test('sends normalized retrieval filters with a turn', async () => {
+  const conversation = {
+    id: 'conversation-3', knowledge_base_id: 'kb-1', knowledge_base_name: 'Operations',
+    title: 'Filtered question', created_at: '2026-07-13T00:00:00Z', updated_at: '2026-07-13T00:00:00Z',
+  }
+  let turnBody: Record<string, unknown> | null = null
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.endsWith('/auth/csrf')) {
+      return new Response(JSON.stringify({ csrf_token: 'csrf' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    if (url.endsWith('/retrieval-documents')) {
+      return new Response(JSON.stringify([{
+        id: 'document-1', original_name: 'policy.md', source_kind: 'markdown',
+        language: 'en', tags: ['policy'], ingested_at: '2026-08-01T00:00:00Z',
+      }]), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }
+    if (url.endsWith('/turns')) {
+      turnBody = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return new Response('event: done\ndata: {"outcome":"insufficient_evidence"}\n\n', {
+        status: 200, headers: { 'Content-Type': 'text/event-stream' },
+      })
+    }
+    if (url.endsWith('/conversation-3')) {
+      return new Response(JSON.stringify({ ...conversation, messages: [] }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    return new Response(JSON.stringify([conversation]), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    })
+  }))
+
+  render(<ChatPanel knowledgeBases={knowledgeBases} initialConversationId="conversation-3" onError={vi.fn()} />)
+  fireEvent.click(screen.getByText('Retrieval filters'))
+  const documents = (await screen.findByLabelText(
+    'Filter Documents',
+  )) as HTMLSelectElement
+  const documentOption = Array.from(documents.options).find(
+    (option) => option.value === 'document-1',
+  )
+  expect(documentOption).toBeDefined()
+  documentOption!.selected = true
+  fireEvent.change(documents)
+  fireEvent.change(screen.getByLabelText('Tags'), { target: { value: ' policy, security ' } })
+  fireEvent.change(screen.getByLabelText('Source type'), { target: { value: 'markdown' } })
+  fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'EN' } })
+  fireEvent.change(screen.getByLabelText('Ingested after'), { target: { value: '2026-08-01' } })
+  fireEvent.change(screen.getByLabelText('Ingested before'), { target: { value: '2026-08-02' } })
+  fireEvent.change(screen.getByLabelText('Ask a question'), { target: { value: 'What changed?' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+  await waitFor(() => expect(turnBody).not.toBeNull())
+  expect(turnBody).toEqual({
+    question: 'What changed?',
+    filters: {
+      document_ids: ['document-1'],
+      tags: ['policy', 'security'],
+      source_kinds: ['markdown'],
+      languages: ['en'],
+      ingested_after: '2026-08-01T00:00:00.000Z',
+      ingested_before: '2026-08-02T23:59:59.999Z',
+    },
+  })
 })

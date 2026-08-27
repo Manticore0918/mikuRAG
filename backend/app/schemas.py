@@ -1,13 +1,14 @@
 import uuid
 from datetime import datetime
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.ingestion.provenance import validate_source_metadata, validate_tags
 from app.rag.citations import LocatorValue
+from app.rag.retrieval_types import RetrievalFilters
 
 
 class UsernamePassword(BaseModel):
@@ -287,8 +288,73 @@ class ConversationDetail(ConversationRead):
     messages: list[MessageRead]
 
 
+class RetrievalFiltersCreate(BaseModel):
+    document_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
+    tags: list[str] = Field(default_factory=list, max_length=32)
+    source_kinds: list[
+        Literal["pdf", "docx", "text", "markdown", "html", "code"]
+    ] = Field(default_factory=list, max_length=6)
+    languages: list[str] = Field(default_factory=list, max_length=16)
+    ingested_after: datetime | None = None
+    ingested_before: datetime | None = None
+
+    @field_validator("ingested_after", "ingested_before")
+    @classmethod
+    def require_filter_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("ingestion date filters must include a timezone")
+        return value
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def clean_filter_tags(cls, value: object) -> list[str]:
+        return validate_tags(value)
+
+    @field_validator("languages", mode="before")
+    @classmethod
+    def clean_filter_languages(cls, value: object) -> list[str]:
+        if not isinstance(value, list):
+            raise ValueError("languages must be a list")
+        cleaned = [str(item).strip().casefold() for item in value]
+        if any(not item or len(item) > 64 for item in cleaned):
+            raise ValueError("languages must contain values up to 64 characters")
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("languages cannot contain duplicates")
+        return cleaned
+
+    @model_validator(mode="after")
+    def validate_ingestion_range(self) -> "RetrievalFiltersCreate":
+        if (
+            self.ingested_after is not None
+            and self.ingested_before is not None
+            and self.ingested_after > self.ingested_before
+        ):
+            raise ValueError("ingested_after must not be later than ingested_before")
+        return self
+
+    def to_domain(self) -> RetrievalFilters:
+        return RetrievalFilters(
+            document_ids=tuple(self.document_ids),
+            tags=tuple(self.tags),
+            source_kinds=tuple(self.source_kinds),
+            languages=tuple(self.languages),
+            ingested_after=self.ingested_after,
+            ingested_before=self.ingested_before,
+        )
+
+
+class RetrievalDocumentRead(BaseModel):
+    id: uuid.UUID
+    original_name: str
+    source_kind: str
+    language: str | None
+    tags: list[str]
+    ingested_at: datetime
+
+
 class TurnCreate(BaseModel):
     question: str = Field(min_length=1, max_length=4_000)
+    filters: RetrievalFiltersCreate = Field(default_factory=RetrievalFiltersCreate)
 
     @field_validator("question")
     @classmethod
