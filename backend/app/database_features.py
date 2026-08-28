@@ -115,3 +115,53 @@ async def reconcile_optional_database_features(
                 "PostgreSQL FTS remains active"
             ),
         }
+
+
+async def repair_bm25_after_deletion(
+    database_engine: AsyncEngine = engine,
+) -> Bm25FeatureStatus:
+    """Rebuild the optional BM25 index after rows are hard-deleted.
+
+    pg_search 0.25.5 can retain stale CTIDs after cascaded deletes from the
+    shared chunks table. A regular reindex repairs the index. The advisory lock
+    serializes this maintenance with extension reconciliation and concurrent
+    purge jobs. Deployments using the stock PostgreSQL FTS path are a no-op.
+    """
+    try:
+        async with database_engine.begin() as connection:
+            ready = bool(
+                (
+                    await connection.execute(
+                        text(
+                            "SELECT EXISTS ("
+                            "SELECT 1 FROM pg_extension WHERE extname = 'pg_search'"
+                            ") AND to_regclass('chunks_search_bm25') IS NOT NULL"
+                        )
+                    )
+                ).scalar()
+            )
+            if not ready:
+                return {
+                    "status": "unavailable",
+                    "detail": "BM25 is not installed; PostgreSQL FTS needs no repair",
+                }
+
+            await connection.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext('mikurag:pg-search'))")
+            )
+            await connection.execute(text("REINDEX INDEX chunks_search_bm25"))
+        return {
+            "status": "ready",
+            "detail": "chunks_search_bm25 was rebuilt after hard deletion",
+        }
+    except Exception as error:  # pragma: no cover - depends on live database state
+        reason = str(getattr(error, "orig", error)).splitlines()[0][:300]
+        logger.warning(
+            "BM25 post-deletion repair failed (%s: %s); FTS remains available",
+            type(error).__name__,
+            error,
+        )
+        return {
+            "status": "error",
+            "detail": f"BM25 post-deletion repair failed: {reason}",
+        }

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import Settings, get_settings
 from app.database import session_factory
+from app.database_features import repair_bm25_after_deletion
 from app.evaluation.contracts import (
     EvaluationAnswerRecord,
     EvaluationCaseRecord,
@@ -459,17 +460,23 @@ class DatabaseEvaluationRuntime:
         )
 
     async def cleanup(self, workspace: EvaluationWorkspace) -> None:
+        knowledge_base_deleted = False
         async with self.sessions() as session:
             knowledge_base = await session.get(KnowledgeBase, workspace.knowledge_base_id)
             if knowledge_base is not None:
                 await session.delete(knowledge_base)
                 await session.commit()
+                knowledge_base_deleted = True
         for storage_key in workspace.storage_keys:
             await asyncio.to_thread(
                 remove_stored_file_sync,
                 self.settings.upload_dir,
                 storage_key,
             )
+        if knowledge_base_deleted:
+            maintenance = await repair_bm25_after_deletion()
+            if maintenance["status"] == "error":
+                raise EvaluationRuntimeError(maintenance["detail"])
 
     async def _load_documents(
         self,

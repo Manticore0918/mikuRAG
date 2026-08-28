@@ -3,7 +3,10 @@ from types import TracebackType
 
 import pytest
 
-from app.database_features import reconcile_optional_database_features
+from app.database_features import (
+    reconcile_optional_database_features,
+    repair_bm25_after_deletion,
+)
 
 
 class FakeResult:
@@ -19,8 +22,8 @@ class FakeConnection:
         self,
         *,
         extension_available: bool,
-        installed_version: str = "0.24.3",
-        default_version: str = "0.24.3",
+        installed_version: str = "0.25.5",
+        default_version: str = "0.25.5",
         fail_on: str | None = None,
     ) -> None:
         self.extension_available = extension_available
@@ -35,6 +38,8 @@ class FakeConnection:
         if self.fail_on and self.fail_on in rendered:
             raise RuntimeError("fixture database failure")
         if "SELECT EXISTS" in rendered and "pg_available_extensions" in rendered:
+            return FakeResult(self.extension_available)
+        if "SELECT EXISTS" in rendered and "pg_extension" in rendered:
             return FakeResult(self.extension_available)
         if "installed_version" in rendered:
             return FakeResult(f"{self.installed_version}|{self.default_version}")
@@ -93,8 +98,8 @@ async def test_reconcile_keeps_fts_when_extension_is_unavailable() -> None:
 async def test_reconcile_upgrades_extension_and_reindexes_existing_bm25_index() -> None:
     connection = FakeConnection(
         extension_available=True,
-        installed_version="0.24.1",
-        default_version="0.24.3",
+        installed_version="0.24.3",
+        default_version="0.25.5",
     )
 
     status = await reconcile_optional_database_features(FakeEngine(connection))  # type: ignore[arg-type]
@@ -111,3 +116,24 @@ async def test_reconcile_reports_optional_feature_failure_without_raising() -> N
     status = await reconcile_optional_database_features(FakeEngine(connection))  # type: ignore[arg-type]
 
     assert status["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_repair_reindexes_bm25_after_hard_deletion() -> None:
+    connection = FakeConnection(extension_available=True)
+
+    status = await repair_bm25_after_deletion(FakeEngine(connection))  # type: ignore[arg-type]
+
+    assert status["status"] == "ready"
+    assert any("pg_advisory_xact_lock" in item for item in connection.statements)
+    assert any("REINDEX INDEX chunks_search_bm25" in item for item in connection.statements)
+
+
+@pytest.mark.asyncio
+async def test_repair_is_noop_without_bm25() -> None:
+    connection = FakeConnection(extension_available=False)
+
+    status = await repair_bm25_after_deletion(FakeEngine(connection))  # type: ignore[arg-type]
+
+    assert status["status"] == "unavailable"
+    assert not any("REINDEX INDEX" in item for item in connection.statements)

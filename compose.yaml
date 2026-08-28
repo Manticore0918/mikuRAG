@@ -73,7 +73,7 @@ services:
     # ParadeDB bundles pg_search (BM25) and pgvector. The pinned tag and SQL
     # dialect are validated by the scripts/spike_pg_search scripts (ADR-0005);
     # stock pgvector remains usable because migration 0010 is guarded.
-    image: ${POSTGRES_IMAGE:-paradedb/paradedb:0.24.3-pg16}
+    image: ${POSTGRES_IMAGE:-paradedb/paradedb:0.25.5-pg16}
     command:
       - postgres
       - -c

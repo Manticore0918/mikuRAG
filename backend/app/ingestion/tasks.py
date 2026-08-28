@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.celery_app import celery_app
 from app.config import Settings, get_settings
+from app.database_features import repair_bm25_after_deletion
 from app.ingestion.chunkers import build_chunker, is_hierarchical_chunker
 from app.ingestion.embeddings import EmbeddingMetrics, embed_texts
 from app.ingestion.errors import EmbeddingProviderError, IngestionError
@@ -504,13 +505,21 @@ async def run_purge(document_id: uuid.UUID) -> None:
             storage_key = document.storage_key
         await asyncio.to_thread(remove_stored_file_sync, settings.upload_dir, storage_key)
         async with sessions() as session:
-            await session.execute(
+            result = await session.execute(
                 delete(Document).where(
                     Document.id == document_id,
                     Document.status == DocumentStatus.DELETING,
                 )
             )
             await session.commit()
+        if result.rowcount:
+            maintenance = await repair_bm25_after_deletion(engine)
+            if maintenance["status"] == "error":
+                logger.warning(
+                    "Document %s was deleted but BM25 maintenance failed: %s",
+                    document_id,
+                    maintenance["detail"],
+                )
     finally:
         await engine.dispose()
 

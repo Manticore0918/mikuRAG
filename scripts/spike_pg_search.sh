@@ -20,7 +20,7 @@
 #
 set -euo pipefail
 
-IMAGE_TAG="${1:-paradedb/paradedb:0.24.3-pg16}"
+IMAGE_TAG="${1:-paradedb/paradedb:0.25.5-pg16}"
 CONTAINER="mikurag-pg-search-spike-$$"
 PG_USER="mikurag"
 PG_PASSWORD="spike"
@@ -43,13 +43,14 @@ if ! docker run -d --name "${CONTAINER}" \
   exit 1
 fi
 
-echo "==> Waiting for PostgreSQL to accept connections"
+echo "==> Waiting for PostgreSQL initialization to finish"
 for i in $(seq 1 60); do
-  if docker exec "${CONTAINER}" pg_isready -U "${PG_USER}" -d "${PG_DB}" >/dev/null 2>&1; then
+  if docker exec "${CONTAINER}" psql -U "${PG_USER}" -d postgres -Atqc \
+    "SELECT 1 FROM pg_database WHERE datname = '${PG_DB}'" 2>/dev/null | grep -qx 1; then
     break
   fi
   if [ "${i}" -eq 60 ]; then
-    echo "ERROR: PostgreSQL did not become ready inside the spike container."
+    echo "ERROR: PostgreSQL did not finish initializing inside the spike container."
     exit 1
   fi
   sleep 1
@@ -60,6 +61,8 @@ DIALECT_SQL=$(cat <<'SQL'
 SELECT current_setting('server_version_num') AS pg_version,
        EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_search') AS pg_search_available,
        EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') AS vector_available;
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_search;
 CREATE TABLE spike_docs (id bigserial PRIMARY KEY, text text NOT NULL);
 CREATE INDEX spike_docs_bm25 ON spike_docs USING bm25 (id, text) WITH (key_field = 'id');
 INSERT INTO spike_docs (text) VALUES

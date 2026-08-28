@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ImageTag = "paradedb/paradedb:0.24.3-pg16"
+    [string]$ImageTag = "paradedb/paradedb:0.25.5-pg16"
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,8 +21,8 @@ $dialectSql = @'
 SELECT current_setting('server_version_num') AS pg_version,
        EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_search') AS pg_search_available,
        EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') AS vector_available;
-CREATE EXTENSION IF NOT EXISTS pg_search;
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_search;
 CREATE TABLE spike_docs (id bigserial PRIMARY KEY, text text NOT NULL);
 CREATE INDEX spike_docs_bm25 ON spike_docs USING bm25 (id, text) WITH (key_field = 'id');
 INSERT INTO spike_docs (text) VALUES
@@ -53,18 +53,26 @@ try {
         $ImageTag | Out-Null
     $containerCreated = $true
 
-    Write-Host "==> Waiting for PostgreSQL"
+    Write-Host "==> Waiting for PostgreSQL initialization"
     $ready = $false
     for ($attempt = 1; $attempt -le 60; $attempt++) {
-        & docker exec $containerName pg_isready -U $postgresUser -d $postgresDatabase *> $null
-        if ($LASTEXITCODE -eq 0) {
+        $databaseReady = $null
+        try {
+            $databaseReady = & docker exec $containerName psql `
+                -U $postgresUser -d postgres -Atqc `
+                "SELECT 1 FROM pg_database WHERE datname = '$postgresDatabase'" 2>$null
+        } catch {
+            # The image briefly starts and stops an initialization server.
+            $databaseReady = $null
+        }
+        if ($LASTEXITCODE -eq 0 -and $databaseReady -eq "1") {
             $ready = $true
             break
         }
         Start-Sleep -Seconds 1
     }
     if (-not $ready) {
-        throw "PostgreSQL did not become ready inside $containerName"
+        throw "PostgreSQL did not finish initializing inside $containerName"
     }
 
     Write-Host "==> Confirming extensions, index syntax, and BM25 query dialect"
