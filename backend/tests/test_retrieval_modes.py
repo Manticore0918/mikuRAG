@@ -252,6 +252,10 @@ async def test_bm25_mode_uses_pg_search_when_available() -> None:
     compiled = str(executed[0].compile())
     assert "@@@" in compiled
     assert "pdb.match" in compiled
+    assert any(
+        "plan_cache_mode = force_custom_plan" in str(statement)
+        for statement in session.executed
+    )
     assert metrics.lexical_kind == "bm25"
     assert metrics.bm25_index_available is True
 

@@ -221,6 +221,10 @@ class PgSearchBM25LexicalRetriever:
             # Isolate it in a savepoint so the caller can safely execute the FTS
             # fallback on the same Session.
             async with session.begin_nested():
+                # pg_search custom scan nodes are not safe when PostgreSQL
+                # promotes a repeatedly executed asyncpg statement to a generic
+                # plan. Force a fresh parameter-aware plan for this transaction.
+                await session.execute(text("SET LOCAL plan_cache_mode = force_custom_plan"))
                 result = await session.execute(
                     select(Chunk, Document, score)
                     .join(Document, Document.id == Chunk.document_id)

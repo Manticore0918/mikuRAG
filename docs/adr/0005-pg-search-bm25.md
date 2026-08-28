@@ -32,6 +32,11 @@ isolated evaluation cleanup. Inserts and soft lifecycle transitions do not run
 this maintenance. Stock PostgreSQL deployments skip it because the extension
 and index are absent.
 
+The production query path also sets `plan_cache_mode = force_custom_plan` for
+the BM25 transaction. The asyncpg prepared-statement path otherwise promoted
+the repeated query to a generic plan and pg_search returned `unrecognized node
+type`; the custom-plan setting keeps the extension's scan node parameter-aware.
+
 Compose explicitly starts PostgreSQL with `shared_preload_libraries=pg_search`.
 This is required for existing pgvector volumes because ParadeDB's first-run
 initialization does not rewrite a pre-existing `postgresql.conf`.
