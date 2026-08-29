@@ -7,6 +7,7 @@ available and skip otherwise — the compose smoke exercises the preloaded
 pg_search path for real on every pull request.
 """
 
+import hashlib
 import uuid
 
 import pytest
@@ -110,7 +111,7 @@ async def _insert_chunk(
         token_count=len(text_value.split()),
         chunking_version="legacy",
         chunking_config_hash="",
-        content_hash=uuid.uuid4().hex,
+        content_hash=hashlib.sha256(uuid.uuid4().bytes).hexdigest(),
         search_vector=func.to_tsvector("simple", text_value),
         embedding=embedding,
         embedding_model=settings.embedding_model_id,

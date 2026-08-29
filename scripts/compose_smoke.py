@@ -106,6 +106,22 @@ def _compose(*arguments: str, capture: bool = True, check: bool = True) -> str:
     )
 
 
+def _ensure_results_tree_writable() -> None:
+    """The evaluate container runs as an unprivileged uid, so the bind-mounted
+    results tree must exist and accept writes from any host uid."""
+    results = BACKEND / "evaluation" / "results"
+    results.mkdir(parents=True, exist_ok=True)
+    try:
+        results.chmod(0o777)
+    except OSError:
+        return  # Windows Docker Desktop mounts are already permissive
+    for path in results.rglob("*"):
+        try:
+            path.chmod(0o777 if path.is_dir() else 0o666)
+        except OSError:
+            pass
+
+
 def _psql(postgres_user: str, postgres_database: str, statement: str) -> str:
     return _compose(
         "exec",
@@ -435,6 +451,7 @@ def main() -> None:
             print(f"  request_id={request_id} citations={len(citations)}")
 
             print("Running the two-case evaluation subset ...")
+            _ensure_results_tree_writable()
             _compose(
                 "--profile",
                 "tools",
