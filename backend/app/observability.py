@@ -3,6 +3,8 @@ import logging
 import math
 from collections.abc import Sequence
 
+from app.correlation import current_correlation_id
+
 OBSERVATION_PREFIX = "mikurag_observation "
 
 ObservationScalar = str | int | float | bool | None
@@ -15,6 +17,12 @@ def emit_observation(
     **fields: ObservationValue,
 ) -> None:
     payload: dict[str, ObservationValue] = {"event": event, **fields}
+    # Only present when a request or task context is active, so background
+    # events keep the historical schema while request-scoped ones join up
+    # with response headers and traces.
+    correlation_id = current_correlation_id()
+    if correlation_id:
+        payload["correlation_id"] = correlation_id
     logger.info(
         "%s%s",
         OBSERVATION_PREFIX,

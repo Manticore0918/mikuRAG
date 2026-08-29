@@ -152,3 +152,8 @@ class RetrievalMetrics:
     reranker_latency_ms: float = 0.0
     rewrite_status: str | None = None
     rewrite_latency_ms: float = 0.0
+    query_embedding_ms: float = 0.0
+    fusion_ms: float = 0.0
+    expansion_ms: float = 0.0
+    query_embedding_cache_status: str = "disabled"
+    retrieval_cache_status: str = "disabled"

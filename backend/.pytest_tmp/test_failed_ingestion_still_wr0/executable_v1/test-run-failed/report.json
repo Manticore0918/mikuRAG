@@ -1,0 +1,37 @@
+{
+  "answer_case_count": 0,
+  "answer_failure_count": 0,
+  "by_category": {},
+  "by_split": {},
+  "case_count": 0,
+  "confidence_intervals": null,
+  "configuration": {
+    "bootstrap_samples": 2000,
+    "bootstrap_seed": 0,
+    "chunking_version": "legacy",
+    "include_answers": false
+  },
+  "document_count": 4,
+  "evaluation_set_version": "executable_v1",
+  "faithfulness": null,
+  "include_answers": false,
+  "ingestion": {
+    "bytes_per_second": null,
+    "chunking_config_hash": null,
+    "documents_per_second": null,
+    "embedding_input_count": 0,
+    "embedding_token_count": 0,
+    "ingestion_duration_ms": null,
+    "storage_estimate_bytes": 0,
+    "total_chunk_count": 0
+  },
+  "knowledge_base_cleaned_up": true,
+  "metrics": null,
+  "ready_document_count": 4,
+  "retrieval_pass_rate": null,
+  "run_id": "test-run-failed",
+  "safe_error": "Evaluation Ingestion failed for: fixture.md",
+  "schema_version": 1,
+  "status": "failed",
+  "turn_measurements": null
+}

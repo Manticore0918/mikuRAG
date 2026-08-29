@@ -1,6 +1,6 @@
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("setup", "checks", "migrations", "seed", "smoke", "restart-smoke", "evaluate")]
+    [ValidateSet("setup", "checks", "migrations", "seed", "smoke", "restart-smoke", "compose-smoke", "evaluate")]
     [string]$Command = "checks"
 )
 
@@ -80,6 +80,10 @@ try {
         "restart-smoke" {
             .\.venv\Scripts\python.exe scripts\restart_smoke.py
             Assert-NativeSuccess "Restart smoke"
+        }
+        "compose-smoke" {
+            .\.venv\Scripts\python.exe scripts\compose_smoke.py
+            Assert-NativeSuccess "Compose smoke"
         }
     }
 }

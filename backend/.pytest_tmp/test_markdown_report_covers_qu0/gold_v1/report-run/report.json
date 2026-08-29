@@ -1,0 +1,228 @@
+{
+  "answer_case_count": 0,
+  "answer_failure_count": 0,
+  "by_category": {
+    "narrow_fact": {
+      "all_required_passages_rate": 1.0,
+      "answer_faithfulness": 1.0,
+      "citation_page_accuracy": 1.0,
+      "citation_precision": 1.0,
+      "end_to_end_latency_p50_ms": 15.0,
+      "end_to_end_latency_p95_ms": 15.0,
+      "end_to_end_latency_p99_ms": 15.0,
+      "filter_correctness": null,
+      "mean_end_to_end_latency_ms": 15.0,
+      "mean_evidence_tokens": 100.0,
+      "mean_reciprocal_rank": 1.0,
+      "mean_retrieval_latency_ms": 10.0,
+      "ndcg_at_10": 1.0,
+      "recall_after_reranking": 1.0,
+      "recall_at_1": 1.0,
+      "recall_at_10": 1.0,
+      "recall_at_5": 1.0,
+      "retrieval_latency_p50_ms": 10.0,
+      "retrieval_latency_p95_ms": 10.0,
+      "retrieval_latency_p99_ms": 10.0
+    }
+  },
+  "by_split": {
+    "test": {
+      "all_required_passages_rate": 1.0,
+      "answer_faithfulness": 1.0,
+      "citation_page_accuracy": 1.0,
+      "citation_precision": 1.0,
+      "end_to_end_latency_p50_ms": 15.0,
+      "end_to_end_latency_p95_ms": 15.0,
+      "end_to_end_latency_p99_ms": 15.0,
+      "filter_correctness": null,
+      "mean_end_to_end_latency_ms": 15.0,
+      "mean_evidence_tokens": 100.0,
+      "mean_reciprocal_rank": 1.0,
+      "mean_retrieval_latency_ms": 10.0,
+      "ndcg_at_10": 1.0,
+      "recall_after_reranking": 1.0,
+      "recall_at_1": 1.0,
+      "recall_at_10": 1.0,
+      "recall_at_5": 1.0,
+      "retrieval_latency_p50_ms": 10.0,
+      "retrieval_latency_p95_ms": 10.0,
+      "retrieval_latency_p99_ms": 10.0
+    },
+    "train": {
+      "all_required_passages_rate": 1.0,
+      "answer_faithfulness": 1.0,
+      "citation_page_accuracy": 1.0,
+      "citation_precision": 1.0,
+      "end_to_end_latency_p50_ms": 15.0,
+      "end_to_end_latency_p95_ms": 15.0,
+      "end_to_end_latency_p99_ms": 15.0,
+      "filter_correctness": null,
+      "mean_end_to_end_latency_ms": 15.0,
+      "mean_evidence_tokens": 100.0,
+      "mean_reciprocal_rank": 1.0,
+      "mean_retrieval_latency_ms": 10.0,
+      "ndcg_at_10": 1.0,
+      "recall_after_reranking": 1.0,
+      "recall_at_1": 1.0,
+      "recall_at_10": 1.0,
+      "recall_at_5": 1.0,
+      "retrieval_latency_p50_ms": 10.0,
+      "retrieval_latency_p95_ms": 10.0,
+      "retrieval_latency_p99_ms": 10.0
+    }
+  },
+  "case_count": 4,
+  "confidence_intervals": {
+    "all_required_passages_rate": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0
+    },
+    "answer_faithfulness": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0
+    },
+    "citation_page_accuracy": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0
+    },
+    "citation_precision": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0
+    },
+    "end_to_end_latency_p50_ms": {
+      "ci_high": 15.0,
+      "ci_low": 15.0,
+      "mean": 15.0
+    },
+    "end_to_end_latency_p95_ms": {
+      "ci_high": 15.0,
+      "ci_low": 15.0,
+      "mean": 15.0
+    },
+    "end_to_end_latency_p99_ms": {
+      "ci_high": 15.0,
+      "ci_low": 15.0,
+      "mean": 15.0
+    },
+    "filter_correctness": {
+      "ci_high": 0.0,
+      "ci_low": 0.0,
+      "mean": 0.0
+    },
+    "mean_end_to_end_latency_ms": {
+      "ci_high": 15.0,
+      "ci_low": 15.0,
+      "mean": 15.0
+    },
+    "mean_evidence_tokens": {
+      "ci_high": 100.0,
+      "ci_low": 100.0,
+      "mean": 100.0
+    },
+    "mean_reciprocal_rank": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0
+    },
+    "mean_retrieval_latency_ms": {
+      "ci_high": 10.0,
+      "ci_low": 10.0,
+      "mean": 10.0
+    },
+    "ndcg_at_10": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0
+    },
+    "recall_after_reranking": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0
+    },
+    "recall_at_1": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0
+    },
+    "recall_at_10": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0
+    },
+    "recall_at_5": {
+      "ci_high": 1.0,
+      "ci_low": 1.0,
+      "mean": 1.0
+    },
+    "retrieval_latency_p50_ms": {
+      "ci_high": 10.0,
+      "ci_low": 10.0,
+      "mean": 10.0
+    },
+    "retrieval_latency_p95_ms": {
+      "ci_high": 10.0,
+      "ci_low": 10.0,
+      "mean": 10.0
+    },
+    "retrieval_latency_p99_ms": {
+      "ci_high": 10.0,
+      "ci_low": 10.0,
+      "mean": 10.0
+    }
+  },
+  "configuration": {
+    "bootstrap_samples": 500,
+    "bootstrap_seed": 0,
+    "chunking_config_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "chunking_version": "token_recursive_v1",
+    "embedding_model_id": "mock-embed"
+  },
+  "document_count": 0,
+  "evaluation_set_version": "gold_v1",
+  "faithfulness": null,
+  "include_answers": true,
+  "ingestion": {
+    "bytes_per_second": 0.0,
+    "chunking_config_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "documents_per_second": 0.0,
+    "embedding_input_count": 8,
+    "embedding_token_count": 0,
+    "ingestion_duration_ms": 250.0,
+    "storage_estimate_bytes": 2048,
+    "total_chunk_count": 12
+  },
+  "knowledge_base_cleaned_up": true,
+  "metrics": {
+    "all_required_passages_rate": 1.0,
+    "answer_faithfulness": 1.0,
+    "citation_page_accuracy": 1.0,
+    "citation_precision": 1.0,
+    "end_to_end_latency_p50_ms": 15.0,
+    "end_to_end_latency_p95_ms": 15.0,
+    "end_to_end_latency_p99_ms": 15.0,
+    "filter_correctness": null,
+    "mean_end_to_end_latency_ms": 15.0,
+    "mean_evidence_tokens": 100.0,
+    "mean_reciprocal_rank": 1.0,
+    "mean_retrieval_latency_ms": 10.0,
+    "ndcg_at_10": 1.0,
+    "recall_after_reranking": 1.0,
+    "recall_at_1": 1.0,
+    "recall_at_10": 1.0,
+    "recall_at_5": 1.0,
+    "retrieval_latency_p50_ms": 10.0,
+    "retrieval_latency_p95_ms": 10.0,
+    "retrieval_latency_p99_ms": 10.0
+  },
+  "ready_document_count": 0,
+  "retrieval_pass_rate": 1.0,
+  "run_id": "report-run",
+  "safe_error": null,
+  "schema_version": 1,
+  "status": "completed",
+  "turn_measurements": null
+}

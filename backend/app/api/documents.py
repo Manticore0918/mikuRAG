@@ -6,13 +6,13 @@ from celery.exceptions import CeleryError
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from kombu.exceptions import OperationalError as KombuOperationalError
 from redis.exceptions import RedisError
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.api.admin import require_knowledge_base
 from app.dependencies import Administrator, DatabaseSession
 from app.ingestion.dispatch import enqueue_ingestion
 from app.ingestion.tasks import purge_document
-from app.models import Document, DocumentStatus
+from app.models import Document, DocumentStatus, KnowledgeBase
 from app.schemas import DocumentRead
 from app.security import require_csrf
 
@@ -102,6 +102,11 @@ async def delete_document(
         document.status = DocumentStatus.DELETING
         document.ingestion_stage = "deleting"
         document.safe_error = None
+        await session.execute(
+            update(KnowledgeBase)
+            .where(KnowledgeBase.id == knowledge_base_id)
+            .values(index_generation=KnowledgeBase.index_generation + 1)
+        )
         await session.commit()
     try:
         purge_document.delay(str(document.id))

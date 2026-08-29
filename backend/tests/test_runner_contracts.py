@@ -70,7 +70,7 @@ def _document(
 
 def _dataset(*documents: EvaluationCorpusDocument) -> ExecutableEvaluationDataset:
     return ExecutableEvaluationDataset(
-        schema_version=2,
+        schema_version=3,
         version="test_v1",
         description="test",
         license_id="CC0-1.0",

@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend-checks:
+    name: Backend / Ruff + pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install (dev + otel extras)
+        run: python -m pip install -e ".[dev]"
+      - name: Ruff
+        run: python -m ruff check --no-cache .
+      - name: Tests
+        run: python -m pytest -q
+
+  frontend-checks:
+    name: Frontend / ESLint + Vitest + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  integration-tests:
+    name: Integrations / PostgreSQL migrations + pgvector + Redis
+    runs-on: ubuntu-latest
+    env:
+      MIKURAG_DATABASE_URL: postgresql+asyncpg://mikurag:mikurag@localhost:5432/mikurag_ci
+      MIKURAG_REDIS_URL: redis://localhost:6379/0
+      MIKURAG_SESSION_SECRET: ci-session-secret-0123456789abcdef
+      MIKURAG_ENCRYPTION_MASTER_KEY: ci-encryption-key-0123456789abcdef
+    services:
+      postgres:
+        image: paradedb/paradedb:0.25.5-pg16
+        env:
+          POSTGRES_USER: mikurag
+          POSTGRES_PASSWORD: mikurag
+          POSTGRES_DB: mikurag
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mikurag -d mikurag"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install (dev extras)
+        working-directory: backend
+        run: python -m pip install -e ".[dev]"
+      - name: Alembic upgrade from a clean database
+        working-directory: backend
+        run: |
+          PG="${{ job.services.postgres.id }}"
+          docker exec "$PG" createdb -U mikurag mikurag_ci
+          alembic upgrade head
+          alembic downgrade 0005
+          alembic upgrade head
+      - name: Alembic upgrade from the previous release schema
+        working-directory: backend
+        run: |
+          PG="${{ job.services.postgres.id }}"
+          docker exec "$PG" createdb -U mikurag mikurag_previous_release
+          MIKURAG_DATABASE_URL=postgresql+asyncpg://mikurag:mikurag@localhost:5432/mikurag_previous_release \
+            alembic upgrade 0005
+          MIKURAG_DATABASE_URL=postgresql+asyncpg://mikurag:mikurag@localhost:5432/mikurag_previous_release \
+            alembic upgrade head
+      - name: Integration tests (real PostgreSQL and Redis)
+        working-directory: backend
+        run: python -m pytest -q -m integration
+
+  docker-builds:
+    name: Images / backend + frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  compose-smoke:
+    name: Compose smoke / stubbed providers + evaluation subset
+    runs-on: ubuntu-latest
+    env:
+      MIKURAG_SMOKE_OTEL: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install httpx for the smoke driver
+        run: python -m pip install "httpx>=0.28,<1"
+      - name: Prepare .env
+        run: |
+          cat > .env <<'EOF'
+          MIKURAG_ENVIRONMENT=test
+          MIKURAG_SESSION_SECRET=ci-session-secret-0123456789abcdef
+          MIKURAG_ENCRYPTION_MASTER_KEY=ci-encryption-key-0123456789abcdef
+          POSTGRES_PASSWORD=ci-postgres-password
+          EOF
+      - name: Run the compose smoke test
+        run: python scripts/compose_smoke.py

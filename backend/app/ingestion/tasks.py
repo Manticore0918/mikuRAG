@@ -12,6 +12,7 @@ from redis.exceptions import RedisError
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app import telemetry
 from app.celery_app import celery_app
 from app.config import Settings, get_settings
 from app.database_features import repair_bm25_after_deletion
@@ -35,7 +36,7 @@ from app.ingestion.summarization import (
 )
 from app.ingestion.tokenization import create_tokenizer
 from app.ingestion.validation import validate_document_limits, validate_hierarchy
-from app.models import Document, DocumentStatus
+from app.models import Document, DocumentStatus, KnowledgeBase
 from app.observability import (
     emit_observation,
     rounded_percentage,
@@ -53,6 +54,7 @@ async def run_ingestion(
 ) -> Literal["busy", "completed", "failed", "skipped"]:
     ingestion_started = perf_counter()
     settings = get_settings()
+    telemetry.attach_attributes(document_id=str(document_id))
     chunking_version = target_chunking_version or settings.chunking_version
     if chunking_version not in {
         "legacy",
@@ -364,6 +366,11 @@ async def run_ingestion(
             document.ingestion_stage = "ready"
             document.ingestion_progress = 100
             document.ingestion_warnings = serialized_warnings
+            await session.execute(
+                update(KnowledgeBase)
+                .where(KnowledgeBase.id == document.knowledge_base_id)
+                .values(index_generation=KnowledgeBase.index_generation + 1)
+            )
             await session.commit()
             observation["persistence_duration_ms"] = _duration_ms(stage_started)
             outcome = "completed"
@@ -389,17 +396,23 @@ async def run_ingestion(
         try:
             await engine.dispose()
         finally:
+            ingestion_duration_ms = round(
+                (perf_counter() - ingestion_started) * 1_000, 2
+            )
             emit_observation(
                 logger,
                 "document_ingestion",
                 **observation,
                 outcome=outcome,
                 terminal_stage=stage,
-                ingestion_duration_ms=round(
-                    (perf_counter() - ingestion_started) * 1_000, 2
-                ),
+                ingestion_duration_ms=ingestion_duration_ms,
                 embedding_duration_ms=round(embedding_metrics.duration_ms, 2),
                 embedding_request_count=embedding_metrics.request_count,
+                embedding_input_count=embedding_metrics.input_count,
+            )
+            telemetry.record_ingestion_document(
+                outcome,
+                duration_ms=ingestion_duration_ms,
                 embedding_input_count=embedding_metrics.input_count,
             )
     return outcome
@@ -503,6 +516,7 @@ async def run_purge(document_id: uuid.UUID) -> None:
             if document is None or document.status != DocumentStatus.DELETING:
                 return
             storage_key = document.storage_key
+            knowledge_base_id = document.knowledge_base_id
         await asyncio.to_thread(remove_stored_file_sync, settings.upload_dir, storage_key)
         async with sessions() as session:
             result = await session.execute(
@@ -511,6 +525,12 @@ async def run_purge(document_id: uuid.UUID) -> None:
                     Document.status == DocumentStatus.DELETING,
                 )
             )
+            if result.rowcount:
+                await session.execute(
+                    update(KnowledgeBase)
+                    .where(KnowledgeBase.id == knowledge_base_id)
+                    .values(index_generation=KnowledgeBase.index_generation + 1)
+                )
             await session.commit()
         if result.rowcount:
             maintenance = await repair_bm25_after_deletion(engine)

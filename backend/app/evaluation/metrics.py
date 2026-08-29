@@ -62,6 +62,10 @@ class RetrievalEvaluationMetrics:
     mean_end_to_end_latency_ms: float
     end_to_end_latency_p95_ms: float
     mean_evidence_tokens: float
+    retrieval_latency_p50_ms: float = 0.0
+    retrieval_latency_p99_ms: float = 0.0
+    end_to_end_latency_p50_ms: float = 0.0
+    end_to_end_latency_p99_ms: float = 0.0
 
 
 def load_evaluation_set(path: Path) -> tuple[str, list[RetrievalEvaluationCase]]:
@@ -163,6 +167,18 @@ def evaluate_retrieval(
         mean_end_to_end_latency_ms=fmean(vectors["end_to_end_latency_ms"]),
         end_to_end_latency_p95_ms=_percentile(sorted(vectors["end_to_end_latency_ms"]), 0.95),
         mean_evidence_tokens=fmean(vectors["evidence_tokens"]),
+        retrieval_latency_p50_ms=_percentile(
+            sorted(vectors["retrieval_latency_ms"]), 0.50
+        ),
+        retrieval_latency_p99_ms=_percentile(
+            sorted(vectors["retrieval_latency_ms"]), 0.99
+        ),
+        end_to_end_latency_p50_ms=_percentile(
+            sorted(vectors["end_to_end_latency_ms"]), 0.50
+        ),
+        end_to_end_latency_p99_ms=_percentile(
+            sorted(vectors["end_to_end_latency_ms"]), 0.99
+        ),
     )
 
 
@@ -193,9 +209,22 @@ _MEAN_VECTOR_METRICS: dict[str, str] = {
     "mean_evidence_tokens": "evidence_tokens",
 }
 
-_P95_VECTOR_METRICS: dict[str, str] = {
+_PERCENTILE_VECTOR_METRICS: dict[str, str] = {
+    "retrieval_latency_p50_ms": "retrieval_latency_ms",
     "retrieval_latency_p95_ms": "retrieval_latency_ms",
+    "retrieval_latency_p99_ms": "retrieval_latency_ms",
+    "end_to_end_latency_p50_ms": "end_to_end_latency_ms",
     "end_to_end_latency_p95_ms": "end_to_end_latency_ms",
+    "end_to_end_latency_p99_ms": "end_to_end_latency_ms",
+}
+
+_PERCENTILE_PROBABILITY = {
+    "retrieval_latency_p50_ms": 0.50,
+    "retrieval_latency_p95_ms": 0.95,
+    "retrieval_latency_p99_ms": 0.99,
+    "end_to_end_latency_p50_ms": 0.50,
+    "end_to_end_latency_p95_ms": 0.95,
+    "end_to_end_latency_p99_ms": 0.99,
 }
 
 
@@ -216,7 +245,7 @@ def bootstrap_confidence_intervals(
     vectors = _per_case_metric_vectors(cases, observations)
     size = len(cases)
     rng = random.Random(seed)
-    metric_names = [*_MEAN_VECTOR_METRICS, *_P95_VECTOR_METRICS]
+    metric_names = [*_MEAN_VECTOR_METRICS, *_PERCENTILE_VECTOR_METRICS]
     sampled = {name: [] for name in metric_names}
     for _ in range(samples):
         indices = [rng.randrange(size) for _ in range(size)]
@@ -228,14 +257,16 @@ def bootstrap_confidence_intervals(
             ]
             if values:
                 sampled[metric].append(fmean(values))
-        for metric, vector_name in _P95_VECTOR_METRICS.items():
+        for metric, vector_name in _PERCENTILE_VECTOR_METRICS.items():
             values = [
                 vectors[vector_name][index]
                 for index in indices
                 if vectors[vector_name][index] is not None
             ]
             if values:
-                sampled[metric].append(_percentile(sorted(values), 0.95))
+                sampled[metric].append(
+                    _percentile(sorted(values), _PERCENTILE_PROBABILITY[metric])
+                )
     intervals: dict[str, dict[str, float]] = {}
     for name in metric_names:
         boot = sorted(sampled[name])

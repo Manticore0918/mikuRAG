@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "version": "gold_v1",
   "description": "Redistributable gold evaluation set: 64 reviewed questions over heterogeneous synthetic Markdown, HTML, PDF, Python, and TypeScript sources. Includes unsupported and genuinely conflicting-evidence cases.",
   "license": "CC0-1.0",
@@ -739,18 +739,33 @@
       "split": "test",
       "relevance_grades": {
         "ops-service-registry": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "e-svc1042-claim-1",
+          "acceptable_answer_facts": [
+            "SVC-1042"
+          ],
+          "required_evidence": [
+            "ops-service-registry"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "SVC-1042"
+        ]
+      ],
+      "required_evidence": [
+        "ops-service-registry"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "e-qpx731",
       "category": "exact_identifier",
       "query": "What about QPX-731?",
-      "history": [
-        {
-          "role": "user",
-          "content": "Which Atlas gateway error codes have documented recovery actions?"
-        }
-      ],
       "relevant_passage_ids": [
         "ops-qpx731"
       ],
@@ -767,7 +782,46 @@
       "split": "test",
       "relevance_grades": {
         "ops-qpx731": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "e-qpx731-claim-1",
+          "acceptable_answer_facts": [
+            "QPX-731"
+          ],
+          "required_evidence": [
+            "ops-qpx731"
+          ]
+        },
+        {
+          "claim_id": "e-qpx731-claim-2",
+          "acceptable_answer_facts": [
+            "quarantine"
+          ],
+          "required_evidence": [
+            "ops-qpx731"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "QPX-731"
+        ],
+        [
+          "quarantine"
+        ]
+      ],
+      "required_evidence": [
+        "ops-qpx731"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false,
+      "history": [
+        {
+          "role": "user",
+          "content": "Which Atlas gateway error codes have documented recovery actions?"
+        }
+      ]
     },
     {
       "case_id": "e-fin882",
@@ -788,7 +842,28 @@
       "split": "train",
       "relevance_grades": {
         "ops-batch-ledger": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "e-fin882-claim-1",
+          "acceptable_answer_facts": [
+            "FIN-882"
+          ],
+          "required_evidence": [
+            "ops-batch-ledger"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "FIN-882"
+        ]
+      ],
+      "required_evidence": [
+        "ops-batch-ledger"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "e-sec417",
@@ -810,7 +885,40 @@
       "split": "train",
       "relevance_grades": {
         "sec-417": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "e-sec417-claim-1",
+          "acceptable_answer_facts": [
+            "SEC-417"
+          ],
+          "required_evidence": [
+            "sec-417"
+          ]
+        },
+        {
+          "claim_id": "e-sec417-claim-2",
+          "acceptable_answer_facts": [
+            "thirty minutes"
+          ],
+          "required_evidence": [
+            "sec-417"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "SEC-417"
+        ],
+        [
+          "thirty minutes"
+        ]
+      ],
+      "required_evidence": [
+        "sec-417"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "e-eu7",
@@ -831,7 +939,28 @@
       "split": "train",
       "relevance_grades": {
         "eu-urgent-route": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "e-eu7-claim-1",
+          "acceptable_answer_facts": [
+            "EU-7"
+          ],
+          "required_evidence": [
+            "eu-urgent-route"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "EU-7"
+        ]
+      ],
+      "required_evidence": [
+        "eu-urgent-route"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "e-sg2",
@@ -852,7 +981,28 @@
       "split": "dev",
       "relevance_grades": {
         "sg-urgent-route": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "e-sg2-claim-1",
+          "acceptable_answer_facts": [
+            "SG-2"
+          ],
+          "required_evidence": [
+            "sg-urgent-route"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "SG-2"
+        ]
+      ],
+      "required_evidence": [
+        "sg-urgent-route"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "e-learning-sgd",
@@ -873,7 +1023,28 @@
       "split": "dev",
       "relevance_grades": {
         "hr-learning-allowance": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "e-learning-sgd-claim-1",
+          "acceptable_answer_facts": [
+            "SGD 1,200"
+          ],
+          "required_evidence": [
+            "hr-learning-allowance"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "SGD 1,200"
+        ]
+      ],
+      "required_evidence": [
+        "hr-learning-allowance"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "e-remote-threshold",
@@ -894,7 +1065,28 @@
       "split": "train",
       "relevance_grades": {
         "hr-remote-equipment": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "e-remote-threshold-claim-1",
+          "acceptable_answer_facts": [
+            "SGD 1,800"
+          ],
+          "required_evidence": [
+            "hr-remote-equipment"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "SGD 1,800"
+        ]
+      ],
+      "required_evidence": [
+        "hr-remote-equipment"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "s-equipment-signoff",
@@ -916,18 +1108,45 @@
       "split": "train",
       "relevance_grades": {
         "hr-remote-equipment": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "s-equipment-signoff-claim-1",
+          "acceptable_answer_facts": [
+            "department head"
+          ],
+          "required_evidence": [
+            "hr-remote-equipment"
+          ]
+        },
+        {
+          "claim_id": "s-equipment-signoff-claim-2",
+          "acceptable_answer_facts": [
+            "Information Technology"
+          ],
+          "required_evidence": [
+            "hr-remote-equipment"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "department head"
+        ],
+        [
+          "Information Technology"
+        ]
+      ],
+      "required_evidence": [
+        "hr-remote-equipment"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "s-idle-lock",
       "category": "semantic_paraphrase",
       "query": "And if the administrator steps away?",
-      "history": [
-        {
-          "role": "user",
-          "content": "We are reviewing the administrator session controls."
-        }
-      ],
       "relevant_passage_ids": [
         "sec-session"
       ],
@@ -943,7 +1162,34 @@
       "split": "dev",
       "relevance_grades": {
         "sec-session": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "s-idle-lock-claim-1",
+          "acceptable_answer_facts": [
+            "twenty minutes"
+          ],
+          "required_evidence": [
+            "sec-session"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "twenty minutes"
+        ]
+      ],
+      "required_evidence": [
+        "sec-session"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false,
+      "history": [
+        {
+          "role": "user",
+          "content": "We are reviewing the administrator session controls."
+        }
+      ]
     },
     {
       "case_id": "s-phish-act",
@@ -965,18 +1211,45 @@
       "split": "train",
       "relevance_grades": {
         "sec-phishing": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "s-phish-act-claim-1",
+          "acceptable_answer_facts": [
+            "fifteen minutes"
+          ],
+          "required_evidence": [
+            "sec-phishing"
+          ]
+        },
+        {
+          "claim_id": "s-phish-act-claim-2",
+          "acceptable_answer_facts": [
+            "Report Phishing"
+          ],
+          "required_evidence": [
+            "sec-phishing"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "fifteen minutes"
+        ],
+        [
+          "Report Phishing"
+        ]
+      ],
+      "required_evidence": [
+        "sec-phishing"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "s-leave-rollover",
       "category": "semantic_paraphrase",
       "query": "What happens above that cap?",
-      "history": [
-        {
-          "role": "user",
-          "content": "How much unused annual leave may an employee carry into the next year?"
-        }
-      ],
       "relevant_passage_ids": [
         "hr-leave-carryover"
       ],
@@ -993,7 +1266,46 @@
       "split": "test",
       "relevance_grades": {
         "hr-leave-carryover": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "s-leave-rollover-claim-1",
+          "acceptable_answer_facts": [
+            "five days"
+          ],
+          "required_evidence": [
+            "hr-leave-carryover"
+          ]
+        },
+        {
+          "claim_id": "s-leave-rollover-claim-2",
+          "acceptable_answer_facts": [
+            "31 December"
+          ],
+          "required_evidence": [
+            "hr-leave-carryover"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "five days"
+        ],
+        [
+          "31 December"
+        ]
+      ],
+      "required_evidence": [
+        "hr-leave-carryover"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false,
+      "history": [
+        {
+          "role": "user",
+          "content": "How much unused annual leave may an employee carry into the next year?"
+        }
+      ]
     },
     {
       "case_id": "s-release-freeze",
@@ -1015,7 +1327,40 @@
       "split": "dev",
       "relevance_grades": {
         "ops-release-windows": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "s-release-freeze-claim-1",
+          "acceptable_answer_facts": [
+            "five business days"
+          ],
+          "required_evidence": [
+            "ops-release-windows"
+          ]
+        },
+        {
+          "claim_id": "s-release-freeze-claim-2",
+          "acceptable_answer_facts": [
+            "freeze"
+          ],
+          "required_evidence": [
+            "ops-release-windows"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "five business days"
+        ],
+        [
+          "freeze"
+        ]
+      ],
+      "required_evidence": [
+        "ops-release-windows"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "s-forward-phish",
@@ -1036,7 +1381,28 @@
       "split": "train",
       "relevance_grades": {
         "sec-phishing": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "s-forward-phish-claim-1",
+          "acceptable_answer_facts": [
+            "prohibited"
+          ],
+          "required_evidence": [
+            "sec-phishing"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "prohibited"
+        ]
+      ],
+      "required_evidence": [
+        "sec-phishing"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "s-qpx-operator",
@@ -1058,7 +1424,40 @@
       "split": "train",
       "relevance_grades": {
         "ops-qpx731": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "s-qpx-operator-claim-1",
+          "acceptable_answer_facts": [
+            "quarantine"
+          ],
+          "required_evidence": [
+            "ops-qpx731"
+          ]
+        },
+        {
+          "claim_id": "s-qpx-operator-claim-2",
+          "acceptable_answer_facts": [
+            "SHA-256"
+          ],
+          "required_evidence": [
+            "ops-qpx731"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "quarantine"
+        ],
+        [
+          "SHA-256"
+        ]
+      ],
+      "required_evidence": [
+        "ops-qpx731"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "xp-rpo-approvers",
@@ -1087,7 +1486,56 @@
       "relevance_grades": {
         "resilience-p2": 3,
         "resilience-p3": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "xp-rpo-approvers-claim-1",
+          "acceptable_answer_facts": [
+            "ten minutes"
+          ],
+          "required_evidence": [
+            "resilience-p2",
+            "resilience-p3"
+          ]
+        },
+        {
+          "claim_id": "xp-rpo-approvers-claim-2",
+          "acceptable_answer_facts": [
+            "Reliability"
+          ],
+          "required_evidence": [
+            "resilience-p2",
+            "resilience-p3"
+          ]
+        },
+        {
+          "claim_id": "xp-rpo-approvers-claim-3",
+          "acceptable_answer_facts": [
+            "product lead"
+          ],
+          "required_evidence": [
+            "resilience-p2",
+            "resilience-p3"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "ten minutes"
+        ],
+        [
+          "Reliability"
+        ],
+        [
+          "product lead"
+        ]
+      ],
+      "required_evidence": [
+        "resilience-p2",
+        "resilience-p3"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "xp-scope-rto",
@@ -1116,7 +1564,56 @@
       "relevance_grades": {
         "resilience-p1": 3,
         "resilience-p2": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "xp-scope-rto-claim-1",
+          "acceptable_answer_facts": [
+            "authentication"
+          ],
+          "required_evidence": [
+            "resilience-p1",
+            "resilience-p2"
+          ]
+        },
+        {
+          "claim_id": "xp-scope-rto-claim-2",
+          "acceptable_answer_facts": [
+            "checkout"
+          ],
+          "required_evidence": [
+            "resilience-p1",
+            "resilience-p2"
+          ]
+        },
+        {
+          "claim_id": "xp-scope-rto-claim-3",
+          "acceptable_answer_facts": [
+            "recovery time objective"
+          ],
+          "required_evidence": [
+            "resilience-p1",
+            "resilience-p2"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "authentication"
+        ],
+        [
+          "checkout"
+        ],
+        [
+          "recovery time objective"
+        ]
+      ],
+      "required_evidence": [
+        "resilience-p1",
+        "resilience-p2"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "xp-integrity-freeze",
@@ -1144,7 +1641,43 @@
       "relevance_grades": {
         "resilience-p1": 3,
         "resilience-p3": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "xp-integrity-freeze-claim-1",
+          "acceptable_answer_facts": [
+            "Commerce lead"
+          ],
+          "required_evidence": [
+            "resilience-p1",
+            "resilience-p3"
+          ]
+        },
+        {
+          "claim_id": "xp-integrity-freeze-claim-2",
+          "acceptable_answer_facts": [
+            "freeze writes"
+          ],
+          "required_evidence": [
+            "resilience-p1",
+            "resilience-p3"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "Commerce lead"
+        ],
+        [
+          "freeze writes"
+        ]
+      ],
+      "required_evidence": [
+        "resilience-p1",
+        "resilience-p3"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "xp-rpo-corrective",
@@ -1172,7 +1705,43 @@
       "relevance_grades": {
         "resilience-p2": 3,
         "resilience-p4": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "xp-rpo-corrective-claim-1",
+          "acceptable_answer_facts": [
+            "ten minutes"
+          ],
+          "required_evidence": [
+            "resilience-p2",
+            "resilience-p4"
+          ]
+        },
+        {
+          "claim_id": "xp-rpo-corrective-claim-2",
+          "acceptable_answer_facts": [
+            "ten business days"
+          ],
+          "required_evidence": [
+            "resilience-p2",
+            "resilience-p4"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "ten minutes"
+        ],
+        [
+          "ten business days"
+        ]
+      ],
+      "required_evidence": [
+        "resilience-p2",
+        "resilience-p4"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "xp-scope-exercise",
@@ -1201,7 +1770,56 @@
       "relevance_grades": {
         "resilience-p1": 3,
         "resilience-p4": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "xp-scope-exercise-claim-1",
+          "acceptable_answer_facts": [
+            "authentication"
+          ],
+          "required_evidence": [
+            "resilience-p1",
+            "resilience-p4"
+          ]
+        },
+        {
+          "claim_id": "xp-scope-exercise-claim-2",
+          "acceptable_answer_facts": [
+            "checkout"
+          ],
+          "required_evidence": [
+            "resilience-p1",
+            "resilience-p4"
+          ]
+        },
+        {
+          "claim_id": "xp-scope-exercise-claim-3",
+          "acceptable_answer_facts": [
+            "quarter"
+          ],
+          "required_evidence": [
+            "resilience-p1",
+            "resilience-p4"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "authentication"
+        ],
+        [
+          "checkout"
+        ],
+        [
+          "quarter"
+        ]
+      ],
+      "required_evidence": [
+        "resilience-p1",
+        "resilience-p4"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "xp-approvers-evidence",
@@ -1229,7 +1847,43 @@
       "relevance_grades": {
         "resilience-p3": 3,
         "resilience-p4": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "xp-approvers-evidence-claim-1",
+          "acceptable_answer_facts": [
+            "Reliability"
+          ],
+          "required_evidence": [
+            "resilience-p3",
+            "resilience-p4"
+          ]
+        },
+        {
+          "claim_id": "xp-approvers-evidence-claim-2",
+          "acceptable_answer_facts": [
+            "thirty days"
+          ],
+          "required_evidence": [
+            "resilience-p3",
+            "resilience-p4"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "Reliability"
+        ],
+        [
+          "thirty days"
+        ]
+      ],
+      "required_evidence": [
+        "resilience-p3",
+        "resilience-p4"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "ms-417-backup",
@@ -1254,7 +1908,43 @@
       "relevance_grades": {
         "sec-417": 3,
         "sec-backup-encryption": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "ms-417-backup-claim-1",
+          "acceptable_answer_facts": [
+            "SEC-417"
+          ],
+          "required_evidence": [
+            "sec-417",
+            "sec-backup-encryption"
+          ]
+        },
+        {
+          "claim_id": "ms-417-backup-claim-2",
+          "acceptable_answer_facts": [
+            "quarter"
+          ],
+          "required_evidence": [
+            "sec-417",
+            "sec-backup-encryption"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "SEC-417"
+        ],
+        [
+          "quarter"
+        ]
+      ],
+      "required_evidence": [
+        "sec-417",
+        "sec-backup-encryption"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "ms-equipment-learning",
@@ -1279,7 +1969,43 @@
       "relevance_grades": {
         "hr-remote-equipment": 3,
         "hr-learning-allowance": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "ms-equipment-learning-claim-1",
+          "acceptable_answer_facts": [
+            "department head"
+          ],
+          "required_evidence": [
+            "hr-remote-equipment",
+            "hr-learning-allowance"
+          ]
+        },
+        {
+          "claim_id": "ms-equipment-learning-claim-2",
+          "acceptable_answer_facts": [
+            "SGD 1,200"
+          ],
+          "required_evidence": [
+            "hr-remote-equipment",
+            "hr-learning-allowance"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "department head"
+        ],
+        [
+          "SGD 1,200"
+        ]
+      ],
+      "required_evidence": [
+        "hr-remote-equipment",
+        "hr-learning-allowance"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "ms-svc-qpx",
@@ -1304,7 +2030,43 @@
       "relevance_grades": {
         "ops-service-registry": 3,
         "ops-qpx731": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "ms-svc-qpx-claim-1",
+          "acceptable_answer_facts": [
+            "SVC-1042"
+          ],
+          "required_evidence": [
+            "ops-service-registry",
+            "ops-qpx731"
+          ]
+        },
+        {
+          "claim_id": "ms-svc-qpx-claim-2",
+          "acceptable_answer_facts": [
+            "QPX-731"
+          ],
+          "required_evidence": [
+            "ops-service-registry",
+            "ops-qpx731"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "SVC-1042"
+        ],
+        [
+          "QPX-731"
+        ]
+      ],
+      "required_evidence": [
+        "ops-service-registry",
+        "ops-qpx731"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "ms-domestic-flights",
@@ -1329,7 +2091,43 @@
       "relevance_grades": {
         "trv-employee-domestic": 3,
         "trv-employee-international": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "ms-domestic-flights-claim-1",
+          "acceptable_answer_facts": [
+            "Finance"
+          ],
+          "required_evidence": [
+            "trv-employee-domestic",
+            "trv-employee-international"
+          ]
+        },
+        {
+          "claim_id": "ms-domestic-flights-claim-2",
+          "acceptable_answer_facts": [
+            "fourteen days"
+          ],
+          "required_evidence": [
+            "trv-employee-domestic",
+            "trv-employee-international"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "Finance"
+        ],
+        [
+          "fourteen days"
+        ]
+      ],
+      "required_evidence": [
+        "trv-employee-domestic",
+        "trv-employee-international"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "ms-logs-breakglass",
@@ -1354,7 +2152,43 @@
       "relevance_grades": {
         "sec-log-retention": 3,
         "sec-breakglass": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "ms-logs-breakglass-claim-1",
+          "acceptable_answer_facts": [
+            "four hundred days"
+          ],
+          "required_evidence": [
+            "sec-log-retention",
+            "sec-breakglass"
+          ]
+        },
+        {
+          "claim_id": "ms-logs-breakglass-claim-2",
+          "acceptable_answer_facts": [
+            "four hours"
+          ],
+          "required_evidence": [
+            "sec-log-retention",
+            "sec-breakglass"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "four hundred days"
+        ],
+        [
+          "four hours"
+        ]
+      ],
+      "required_evidence": [
+        "sec-log-retention",
+        "sec-breakglass"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "c-backoff-attempt6",
@@ -1375,7 +2209,28 @@
       "split": "train",
       "relevance_grades": {
         "scheduler-compute-backoff": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "c-backoff-attempt6-claim-1",
+          "acceptable_answer_facts": [
+            "120"
+          ],
+          "required_evidence": [
+            "scheduler-compute-backoff"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "120"
+        ]
+      ],
+      "required_evidence": [
+        "scheduler-compute-backoff"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "c-retry-codes",
@@ -1397,7 +2252,40 @@
       "split": "dev",
       "relevance_grades": {
         "scheduler-should-retry": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "c-retry-codes-claim-1",
+          "acceptable_answer_facts": [
+            "408"
+          ],
+          "required_evidence": [
+            "scheduler-should-retry"
+          ]
+        },
+        {
+          "claim_id": "c-retry-codes-claim-2",
+          "acceptable_answer_facts": [
+            "429"
+          ],
+          "required_evidence": [
+            "scheduler-should-retry"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "408"
+        ],
+        [
+          "429"
+        ]
+      ],
+      "required_evidence": [
+        "scheduler-should-retry"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "c-window-over6",
@@ -1418,7 +2306,28 @@
       "split": "test",
       "relevance_grades": {
         "scheduler-parse-window": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "c-window-over6-claim-1",
+          "acceptable_answer_facts": [
+            "six hours"
+          ],
+          "required_evidence": [
+            "scheduler-parse-window"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "six hours"
+        ]
+      ],
+      "required_evidence": [
+        "scheduler-parse-window"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "c-lease-renew",
@@ -1440,7 +2349,40 @@
       "split": "test",
       "relevance_grades": {
         "scheduler-lease-guard": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "c-lease-renew-claim-1",
+          "acceptable_answer_facts": [
+            "PermissionError"
+          ],
+          "required_evidence": [
+            "scheduler-lease-guard"
+          ]
+        },
+        {
+          "claim_id": "c-lease-renew-claim-2",
+          "acceptable_answer_facts": [
+            "lease owner"
+          ],
+          "required_evidence": [
+            "scheduler-lease-guard"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "PermissionError"
+        ],
+        [
+          "lease owner"
+        ]
+      ],
+      "required_evidence": [
+        "scheduler-lease-guard"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "c-normalize-slashes",
@@ -1462,7 +2404,40 @@
       "split": "train",
       "relevance_grades": {
         "throttle-normalize-key": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "c-normalize-slashes-claim-1",
+          "acceptable_answer_facts": [
+            "toLowerCase"
+          ],
+          "required_evidence": [
+            "throttle-normalize-key"
+          ]
+        },
+        {
+          "claim_id": "c-normalize-slashes-claim-2",
+          "acceptable_answer_facts": [
+            "replaceAll"
+          ],
+          "required_evidence": [
+            "throttle-normalize-key"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "toLowerCase"
+        ],
+        [
+          "replaceAll"
+        ]
+      ],
+      "required_evidence": [
+        "throttle-normalize-key"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "c-bucket-empty",
@@ -1483,7 +2458,28 @@
       "split": "dev",
       "relevance_grades": {
         "throttle-token-bucket": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "c-bucket-empty-claim-1",
+          "acceptable_answer_facts": [
+            "false"
+          ],
+          "required_evidence": [
+            "throttle-token-bucket"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "false"
+        ]
+      ],
+      "required_evidence": [
+        "throttle-token-bucket"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "c-breaker-threshold",
@@ -1505,7 +2501,40 @@
       "split": "train",
       "relevance_grades": {
         "throttle-circuit-breaker": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "c-breaker-threshold-claim-1",
+          "acceptable_answer_facts": [
+            "5"
+          ],
+          "required_evidence": [
+            "throttle-circuit-breaker"
+          ]
+        },
+        {
+          "claim_id": "c-breaker-threshold-claim-2",
+          "acceptable_answer_facts": [
+            "30"
+          ],
+          "required_evidence": [
+            "throttle-circuit-breaker"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "5"
+        ],
+        [
+          "30"
+        ]
+      ],
+      "required_evidence": [
+        "throttle-circuit-breaker"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "c-partition-zero",
@@ -1526,7 +2555,28 @@
       "split": "train",
       "relevance_grades": {
         "throttle-partition-for": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "c-partition-zero-claim-1",
+          "acceptable_answer_facts": [
+            "shard count must be positive"
+          ],
+          "required_evidence": [
+            "throttle-partition-for"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "shard count must be positive"
+        ]
+      ],
+      "required_evidence": [
+        "throttle-partition-for"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "h-invoice-rows",
@@ -1547,7 +2597,28 @@
       "split": "test",
       "relevance_grades": {
         "portal-invoice-limit": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "h-invoice-rows-claim-1",
+          "acceptable_answer_facts": [
+            "25,000"
+          ],
+          "required_evidence": [
+            "portal-invoice-limit"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "25,000"
+        ]
+      ],
+      "required_evidence": [
+        "portal-invoice-limit"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "h-invoice-formats",
@@ -1569,7 +2640,40 @@
       "split": "dev",
       "relevance_grades": {
         "portal-invoice-formats": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "h-invoice-formats-claim-1",
+          "acceptable_answer_facts": [
+            "CSV"
+          ],
+          "required_evidence": [
+            "portal-invoice-formats"
+          ]
+        },
+        {
+          "claim_id": "h-invoice-formats-claim-2",
+          "acceptable_answer_facts": [
+            "JSON"
+          ],
+          "required_evidence": [
+            "portal-invoice-formats"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "CSV"
+        ],
+        [
+          "JSON"
+        ]
+      ],
+      "required_evidence": [
+        "portal-invoice-formats"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "h-alert-p1",
@@ -1591,7 +2695,40 @@
       "split": "train",
       "relevance_grades": {
         "portal-alert-p1": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "h-alert-p1-claim-1",
+          "acceptable_answer_facts": [
+            "SMS"
+          ],
+          "required_evidence": [
+            "portal-alert-p1"
+          ]
+        },
+        {
+          "claim_id": "h-alert-p1-claim-2",
+          "acceptable_answer_facts": [
+            "phone call"
+          ],
+          "required_evidence": [
+            "portal-alert-p1"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "SMS"
+        ],
+        [
+          "phone call"
+        ]
+      ],
+      "required_evidence": [
+        "portal-alert-p1"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "h-alert-email",
@@ -1615,7 +2752,30 @@
       "relevance_grades": {
         "portal-alert-p2": 3,
         "portal-alert-p3": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "h-alert-email-claim-1",
+          "acceptable_answer_facts": [
+            "email"
+          ],
+          "required_evidence": [
+            "portal-alert-p2",
+            "portal-alert-p3"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "email"
+        ]
+      ],
+      "required_evidence": [
+        "portal-alert-p2",
+        "portal-alert-p3"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "h-setup-checklist",
@@ -1643,7 +2803,46 @@
         "portal-account-setup-li1": 3,
         "portal-account-setup-li2": 3,
         "portal-account-setup-li3": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "h-setup-checklist-claim-1",
+          "acceptable_answer_facts": [
+            "passkey"
+          ],
+          "required_evidence": [
+            "portal-account-setup-li1",
+            "portal-account-setup-li2",
+            "portal-account-setup-li3"
+          ]
+        },
+        {
+          "claim_id": "h-setup-checklist-claim-2",
+          "acceptable_answer_facts": [
+            "recovery codes"
+          ],
+          "required_evidence": [
+            "portal-account-setup-li1",
+            "portal-account-setup-li2",
+            "portal-account-setup-li3"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "passkey"
+        ],
+        [
+          "recovery codes"
+        ]
+      ],
+      "required_evidence": [
+        "portal-account-setup-li1",
+        "portal-account-setup-li2",
+        "portal-account-setup-li3"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "h-search-syntax",
@@ -1664,7 +2863,28 @@
       "split": "train",
       "relevance_grades": {
         "portal-search-syntax": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "h-search-syntax-claim-1",
+          "acceptable_answer_facts": [
+            "quotation marks"
+          ],
+          "required_evidence": [
+            "portal-search-syntax"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "quotation marks"
+        ]
+      ],
+      "required_evidence": [
+        "portal-search-syntax"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "h-shortcut-home",
@@ -1685,7 +2905,28 @@
       "split": "dev",
       "relevance_grades": {
         "portal-shortcut-home": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "h-shortcut-home-claim-1",
+          "acceptable_answer_facts": [
+            "g then h"
+          ],
+          "required_evidence": [
+            "portal-shortcut-home"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "g then h"
+        ]
+      ],
+      "required_evidence": [
+        "portal-shortcut-home"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "md-audit-windows",
@@ -1710,7 +2951,43 @@
       "relevance_grades": {
         "ret-current-audit": 3,
         "ret-legacy-audit": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "md-audit-windows-claim-1",
+          "acceptable_answer_facts": [
+            "365 days"
+          ],
+          "required_evidence": [
+            "ret-current-audit",
+            "ret-legacy-audit"
+          ]
+        },
+        {
+          "claim_id": "md-audit-windows-claim-2",
+          "acceptable_answer_facts": [
+            "180 days"
+          ],
+          "required_evidence": [
+            "ret-current-audit",
+            "ret-legacy-audit"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "365 days"
+        ],
+        [
+          "180 days"
+        ]
+      ],
+      "required_evidence": [
+        "ret-current-audit",
+        "ret-legacy-audit"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "md-deletion-windows",
@@ -1735,7 +3012,43 @@
       "relevance_grades": {
         "ret-current-deletion": 3,
         "ret-legacy-deletion": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "md-deletion-windows-claim-1",
+          "acceptable_answer_facts": [
+            "thirty days"
+          ],
+          "required_evidence": [
+            "ret-current-deletion",
+            "ret-legacy-deletion"
+          ]
+        },
+        {
+          "claim_id": "md-deletion-windows-claim-2",
+          "acceptable_answer_facts": [
+            "sixty days"
+          ],
+          "required_evidence": [
+            "ret-current-deletion",
+            "ret-legacy-deletion"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "thirty days"
+        ],
+        [
+          "sixty days"
+        ]
+      ],
+      "required_evidence": [
+        "ret-current-deletion",
+        "ret-legacy-deletion"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "md-billing-windows",
@@ -1760,7 +3073,43 @@
       "relevance_grades": {
         "ret-current-billing": 3,
         "ret-legacy-billing": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "md-billing-windows-claim-1",
+          "acceptable_answer_facts": [
+            "seven years"
+          ],
+          "required_evidence": [
+            "ret-current-billing",
+            "ret-legacy-billing"
+          ]
+        },
+        {
+          "claim_id": "md-billing-windows-claim-2",
+          "acceptable_answer_facts": [
+            "five years"
+          ],
+          "required_evidence": [
+            "ret-current-billing",
+            "ret-legacy-billing"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "seven years"
+        ],
+        [
+          "five years"
+        ]
+      ],
+      "required_evidence": [
+        "ret-current-billing",
+        "ret-legacy-billing"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "md-support-hours",
@@ -1785,7 +3134,43 @@
       "relevance_grades": {
         "eu-service-hours": 3,
         "sg-service-hours": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "md-support-hours-claim-1",
+          "acceptable_answer_facts": [
+            "Monday through Friday"
+          ],
+          "required_evidence": [
+            "eu-service-hours",
+            "sg-service-hours"
+          ]
+        },
+        {
+          "claim_id": "md-support-hours-claim-2",
+          "acceptable_answer_facts": [
+            "Monday through Saturday"
+          ],
+          "required_evidence": [
+            "eu-service-hours",
+            "sg-service-hours"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "Monday through Friday"
+        ],
+        [
+          "Monday through Saturday"
+        ]
+      ],
+      "required_evidence": [
+        "eu-service-hours",
+        "sg-service-hours"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "md-urgent-codes",
@@ -1811,7 +3196,56 @@
       "relevance_grades": {
         "eu-urgent-route": 3,
         "sg-urgent-route": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "md-urgent-codes-claim-1",
+          "acceptable_answer_facts": [
+            "EU-7"
+          ],
+          "required_evidence": [
+            "eu-urgent-route",
+            "sg-urgent-route"
+          ]
+        },
+        {
+          "claim_id": "md-urgent-codes-claim-2",
+          "acceptable_answer_facts": [
+            "SG-2"
+          ],
+          "required_evidence": [
+            "eu-urgent-route",
+            "sg-urgent-route"
+          ]
+        },
+        {
+          "claim_id": "md-urgent-codes-claim-3",
+          "acceptable_answer_facts": [
+            "twelve-minute"
+          ],
+          "required_evidence": [
+            "eu-urgent-route",
+            "sg-urgent-route"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "EU-7"
+        ],
+        [
+          "SG-2"
+        ],
+        [
+          "twelve-minute"
+        ]
+      ],
+      "required_evidence": [
+        "eu-urgent-route",
+        "sg-urgent-route"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "md-approval-employee",
@@ -1836,7 +3270,43 @@
       "relevance_grades": {
         "trv-employee-domestic": 3,
         "trv-employee-international": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "md-approval-employee-claim-1",
+          "acceptable_answer_facts": [
+            "manager"
+          ],
+          "required_evidence": [
+            "trv-employee-domestic",
+            "trv-employee-international"
+          ]
+        },
+        {
+          "claim_id": "md-approval-employee-claim-2",
+          "acceptable_answer_facts": [
+            "regional director"
+          ],
+          "required_evidence": [
+            "trv-employee-domestic",
+            "trv-employee-international"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "manager"
+        ],
+        [
+          "regional director"
+        ]
+      ],
+      "required_evidence": [
+        "trv-employee-domestic",
+        "trv-employee-international"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "md-access-grants",
@@ -1861,7 +3331,43 @@
       "relevance_grades": {
         "hr-contractor-access": 3,
         "sec-breakglass": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "md-access-grants-claim-1",
+          "acceptable_answer_facts": [
+            "eight hours"
+          ],
+          "required_evidence": [
+            "hr-contractor-access",
+            "sec-breakglass"
+          ]
+        },
+        {
+          "claim_id": "md-access-grants-claim-2",
+          "acceptable_answer_facts": [
+            "four hours"
+          ],
+          "required_evidence": [
+            "hr-contractor-access",
+            "sec-breakglass"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "eight hours"
+        ],
+        [
+          "four hours"
+        ]
+      ],
+      "required_evidence": [
+        "hr-contractor-access",
+        "sec-breakglass"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "m-billing-current",
@@ -1883,6 +3389,27 @@
       "relevance_grades": {
         "ret-current-billing": 3
       },
+      "expected_claims": [
+        {
+          "claim_id": "m-billing-current-claim-1",
+          "acceptable_answer_facts": [
+            "seven years"
+          ],
+          "required_evidence": [
+            "ret-current-billing"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "seven years"
+        ]
+      ],
+      "required_evidence": [
+        "ret-current-billing"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false,
       "filters": {
         "document_ids": [
           "retention-current"
@@ -1909,6 +3436,27 @@
       "relevance_grades": {
         "ret-current-deletion": 3
       },
+      "expected_claims": [
+        {
+          "claim_id": "m-deletion-current-claim-1",
+          "acceptable_answer_facts": [
+            "thirty days"
+          ],
+          "required_evidence": [
+            "ret-current-deletion"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "thirty days"
+        ]
+      ],
+      "required_evidence": [
+        "ret-current-deletion"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false,
       "filters": {
         "document_ids": [
           "retention-current"
@@ -1936,6 +3484,39 @@
       "relevance_grades": {
         "sg-service-hours": 3
       },
+      "expected_claims": [
+        {
+          "claim_id": "m-sg-hours-claim-1",
+          "acceptable_answer_facts": [
+            "Monday through Saturday"
+          ],
+          "required_evidence": [
+            "sg-service-hours"
+          ]
+        },
+        {
+          "claim_id": "m-sg-hours-claim-2",
+          "acceptable_answer_facts": [
+            "Singapore Time"
+          ],
+          "required_evidence": [
+            "sg-service-hours"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "Monday through Saturday"
+        ],
+        [
+          "Singapore Time"
+        ]
+      ],
+      "required_evidence": [
+        "sg-service-hours"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false,
       "filters": {
         "document_ids": [
           "support-sg"
@@ -1965,6 +3546,27 @@
       "relevance_grades": {
         "scheduler-lease-guard": 3
       },
+      "expected_claims": [
+        {
+          "claim_id": "m-python-lease-claim-1",
+          "acceptable_answer_facts": [
+            "PermissionError"
+          ],
+          "required_evidence": [
+            "scheduler-lease-guard"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "PermissionError"
+        ]
+      ],
+      "required_evidence": [
+        "scheduler-lease-guard"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false,
       "filters": {
         "languages": [
           "python"
@@ -1991,6 +3593,27 @@
       "relevance_grades": {
         "sec-session": 3
       },
+      "expected_claims": [
+        {
+          "claim_id": "m-security-session-claim-1",
+          "acceptable_answer_facts": [
+            "twenty minutes"
+          ],
+          "required_evidence": [
+            "sec-session"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "twenty minutes"
+        ]
+      ],
+      "required_evidence": [
+        "sec-session"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false,
       "filters": {
         "tags": [
           "security"
@@ -2028,7 +3651,43 @@
         "sec-breakglass": 1,
         "sec-log-retention": 1,
         "sec-phishing": 1
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "b-security-overview-claim-1",
+          "acceptable_answer_facts": [
+            "SEC-417"
+          ],
+          "required_evidence": [
+            "sec-417",
+            "sec-backup-encryption"
+          ]
+        },
+        {
+          "claim_id": "b-security-overview-claim-2",
+          "acceptable_answer_facts": [
+            "AES-256"
+          ],
+          "required_evidence": [
+            "sec-417",
+            "sec-backup-encryption"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "SEC-417"
+        ],
+        [
+          "AES-256"
+        ]
+      ],
+      "required_evidence": [
+        "sec-417",
+        "sec-backup-encryption"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "b-travel-overview",
@@ -2061,7 +3720,43 @@
         "trv-employee-ground": 1,
         "trv-contractor-lodging": 1,
         "trv-contractor-deadline": 1
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "b-travel-overview-claim-1",
+          "acceptable_answer_facts": [
+            "Procurement"
+          ],
+          "required_evidence": [
+            "trv-employee-domestic",
+            "trv-contractor-approval"
+          ]
+        },
+        {
+          "claim_id": "b-travel-overview-claim-2",
+          "acceptable_answer_facts": [
+            "manager"
+          ],
+          "required_evidence": [
+            "trv-employee-domestic",
+            "trv-contractor-approval"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "Procurement"
+        ],
+        [
+          "manager"
+        ]
+      ],
+      "required_evidence": [
+        "trv-employee-domestic",
+        "trv-contractor-approval"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "b-ops-overview",
@@ -2095,7 +3790,46 @@
         "ops-release-windows": 1,
         "ops-p1-escalation": 1,
         "ops-batch-ledger": 1
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "b-ops-overview-claim-1",
+          "acceptable_answer_facts": [
+            "SVC-1042"
+          ],
+          "required_evidence": [
+            "ops-service-registry",
+            "ops-qpx731",
+            "ops-status-probes"
+          ]
+        },
+        {
+          "claim_id": "b-ops-overview-claim-2",
+          "acceptable_answer_facts": [
+            "QPX-731"
+          ],
+          "required_evidence": [
+            "ops-service-registry",
+            "ops-qpx731",
+            "ops-status-probes"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "SVC-1042"
+        ],
+        [
+          "QPX-731"
+        ]
+      ],
+      "required_evidence": [
+        "ops-service-registry",
+        "ops-qpx731",
+        "ops-status-probes"
+      ],
+      "refusal_expected": false,
+      "conflicting_evidence": false
     },
     {
       "case_id": "u-office-temp",
@@ -2108,7 +3842,12 @@
       "expects_supported_answer": false,
       "reviewed": true,
       "split": "dev",
-      "relevance_grades": {}
+      "relevance_grades": {},
+      "expected_claims": [],
+      "acceptable_answer_facts": [],
+      "required_evidence": [],
+      "refusal_expected": true,
+      "conflicting_evidence": false
     },
     {
       "case_id": "u-ceo-salary",
@@ -2121,7 +3860,12 @@
       "expects_supported_answer": false,
       "reviewed": true,
       "split": "train",
-      "relevance_grades": {}
+      "relevance_grades": {},
+      "expected_claims": [],
+      "acceptable_answer_facts": [],
+      "required_evidence": [],
+      "refusal_expected": true,
+      "conflicting_evidence": false
     },
     {
       "case_id": "u-all-hands",
@@ -2134,7 +3878,12 @@
       "expects_supported_answer": false,
       "reviewed": true,
       "split": "train",
-      "relevance_grades": {}
+      "relevance_grades": {},
+      "expected_claims": [],
+      "acceptable_answer_facts": [],
+      "required_evidence": [],
+      "refusal_expected": true,
+      "conflicting_evidence": false
     },
     {
       "case_id": "u-support-phone",
@@ -2147,7 +3896,12 @@
       "expects_supported_answer": false,
       "reviewed": true,
       "split": "test",
-      "relevance_grades": {}
+      "relevance_grades": {},
+      "expected_claims": [],
+      "acceptable_answer_facts": [],
+      "required_evidence": [],
+      "refusal_expected": true,
+      "conflicting_evidence": false
     },
     {
       "case_id": "cf-lodging-cap",
@@ -2171,7 +3925,30 @@
       "relevance_grades": {
         "trv-contractor-lodging": 3,
         "faq-lodging-cap": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "cf-lodging-cap-claim-1",
+          "acceptable_answer_facts": [
+            "cannot answer reliably"
+          ],
+          "required_evidence": [
+            "trv-contractor-lodging",
+            "faq-lodging-cap"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "cannot answer reliably"
+        ]
+      ],
+      "required_evidence": [
+        "trv-contractor-lodging",
+        "faq-lodging-cap"
+      ],
+      "refusal_expected": true,
+      "conflicting_evidence": true
     },
     {
       "case_id": "cf-trip-approval",
@@ -2195,7 +3972,30 @@
       "relevance_grades": {
         "trv-contractor-approval": 3,
         "faq-trip-approval": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "cf-trip-approval-claim-1",
+          "acceptable_answer_facts": [
+            "cannot answer reliably"
+          ],
+          "required_evidence": [
+            "trv-contractor-approval",
+            "faq-trip-approval"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "cannot answer reliably"
+        ]
+      ],
+      "required_evidence": [
+        "trv-contractor-approval",
+        "faq-trip-approval"
+      ],
+      "refusal_expected": true,
+      "conflicting_evidence": true
     },
     {
       "case_id": "cf-expense-deadline",
@@ -2219,7 +4019,30 @@
       "relevance_grades": {
         "trv-contractor-deadline": 3,
         "faq-expense-deadline": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "cf-expense-deadline-claim-1",
+          "acceptable_answer_facts": [
+            "cannot answer reliably"
+          ],
+          "required_evidence": [
+            "trv-contractor-deadline",
+            "faq-expense-deadline"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "cannot answer reliably"
+        ]
+      ],
+      "required_evidence": [
+        "trv-contractor-deadline",
+        "faq-expense-deadline"
+      ],
+      "refusal_expected": true,
+      "conflicting_evidence": true
     },
     {
       "case_id": "cf-remote-equipment",
@@ -2243,7 +4066,30 @@
       "relevance_grades": {
         "hr-remote-equipment": 3,
         "faq-remote-equipment": 3
-      }
+      },
+      "expected_claims": [
+        {
+          "claim_id": "cf-remote-equipment-claim-1",
+          "acceptable_answer_facts": [
+            "cannot answer reliably"
+          ],
+          "required_evidence": [
+            "hr-remote-equipment",
+            "faq-remote-equipment"
+          ]
+        }
+      ],
+      "acceptable_answer_facts": [
+        [
+          "cannot answer reliably"
+        ]
+      ],
+      "required_evidence": [
+        "hr-remote-equipment",
+        "faq-remote-equipment"
+      ],
+      "refusal_expected": true,
+      "conflicting_evidence": true
     }
   ]
 }

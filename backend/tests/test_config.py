@@ -29,6 +29,8 @@ ARCHITECTURE_ENV_KEYS = {
     "MIKURAG_WORKER_MEMORY_LIMIT_BYTES",
     "MIKURAG_REINDEX_MAX_ATTEMPTS",
     "MIKURAG_REINDEX_BATCH_DELAY_SECONDS",
+    "MIKURAG_OTEL_ENABLED",
+    "MIKURAG_OTEL_EXPORTER_ENDPOINT",
 }
 
 
@@ -62,13 +64,35 @@ def test_architecture_settings_are_wired_into_deployment_templates() -> None:
         assert f"{key}:" in compose
 
 
-def test_rejects_insecure_embedding_endpoint() -> None:
+def test_rejects_insecure_embedding_endpoint_outside_test_environment() -> None:
     with pytest.raises(ValidationError):
         Settings(
+            environment="development",
             session_secret="s" * 32,
             encryption_master_key="e" * 32,
             embedding_endpoint="http://provider.example/embed",
         )
+    with pytest.raises(ValidationError):
+        Settings(
+            environment="production",
+            session_secret="s" * 32,
+            encryption_master_key="e" * 32,
+            embedding_endpoint="http://provider.example/embed",
+        )
+
+
+def test_test_environment_accepts_plain_http_provider_endpoints() -> None:
+    """The compose smoke points both providers at the in-network stub."""
+
+    settings = Settings(
+        environment="test",
+        session_secret="s" * 32,
+        encryption_master_key="e" * 32,
+        embedding_endpoint="http://provider-stub:8900/embeddings",
+        generation_base_url="http://provider-stub:8900/v1",
+    )
+    assert settings.embedding_endpoint == "http://provider-stub:8900/embeddings"
+    assert settings.generation_base_url == "http://provider-stub:8900/v1"
 
 
 def test_rejects_chunk_overlap_larger_than_target() -> None:
@@ -199,6 +223,7 @@ def test_empty_embedding_key_is_treated_as_unconfigured() -> None:
 
 def test_generation_endpoint_accepts_local_http_and_rejects_remote_http() -> None:
     local = Settings(
+        environment="development",
         session_secret="s" * 32,
         encryption_master_key="e" * 32,
         generation_base_url="http://localhost:11434/v1/",
@@ -206,7 +231,45 @@ def test_generation_endpoint_accepts_local_http_and_rejects_remote_http() -> Non
     assert local.generation_base_url == "http://localhost:11434/v1"
     with pytest.raises(ValidationError):
         Settings(
+            environment="development",
             session_secret="s" * 32,
             encryption_master_key="e" * 32,
             generation_base_url="http://models.example/v1",
+        )
+    with pytest.raises(ValidationError):
+        Settings(
+            environment="production",
+            session_secret="s" * 32,
+            encryption_master_key="e" * 32,
+            generation_base_url="http://models.example/v1",
+        )
+
+
+def test_otel_settings_are_off_by_default_and_validate_the_endpoint() -> None:
+    settings = Settings(
+        session_secret="s" * 32,
+        encryption_master_key="e" * 32,
+    )
+    assert settings.otel_enabled is False
+    assert settings.otel_trace_sample_ratio == 1.0
+    configured = Settings(
+        session_secret="s" * 32,
+        encryption_master_key="e" * 32,
+        otel_enabled=True,
+        otel_exporter_endpoint="http://otel-collector:4318/",
+        otel_trace_sample_ratio=0.25,
+    )
+    assert configured.otel_exporter_endpoint == "http://otel-collector:4318"
+    assert configured.otel_trace_sample_ratio == 0.25
+    with pytest.raises(ValidationError):
+        Settings(
+            session_secret="s" * 32,
+            encryption_master_key="e" * 32,
+            otel_exporter_endpoint="ftp://otel-collector:4318",
+        )
+    with pytest.raises(ValidationError):
+        Settings(
+            session_secret="s" * 32,
+            encryption_master_key="e" * 32,
+            otel_trace_sample_ratio=1.5,
         )

@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.signals import worker_process_init
 
 from app.config import get_settings
 
@@ -26,6 +27,18 @@ celery_app.conf.update(
         }
     },
 )
+
+
+@worker_process_init.connect
+def _init_worker_observability(**_: object) -> None:
+    """Adopt correlation IDs and (optionally) telemetry in each worker child."""
+
+    from app.correlation import connect_celery_signals, install_record_factory
+    from app.telemetry import instrument_worker
+
+    install_record_factory()
+    connect_celery_signals()
+    instrument_worker()
 
 
 @celery_app.task(name="mikurag.health.ping")

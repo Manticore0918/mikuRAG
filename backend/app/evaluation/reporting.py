@@ -1,4 +1,6 @@
 import json
+import math
+from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -8,6 +10,7 @@ from app.evaluation.contracts import (
     EvaluationCaseRecord,
     EvaluationRunRecord,
 )
+from app.evaluation.faithfulness import aggregate_faithfulness
 from app.rag.evaluation import (
     RetrievalEvaluationCase,
     RetrievalEvaluationObservation,
@@ -38,9 +41,19 @@ def build_aggregate_report(run: EvaluationRunRecord) -> dict[str, Any]:
             "ingestion_duration_ms": run.ingestion_duration_ms,
             "total_chunk_count": run.total_chunk_count,
             "embedding_input_count": run.embedding_input_count,
+            "embedding_token_count": run.embedding_token_count,
             "storage_estimate_bytes": run.storage_estimate_bytes,
             "chunking_config_hash": run.chunking_config_hash,
+            "documents_per_second": _rate(
+                len(run.documents), run.ingestion_duration_ms
+            ),
+            "bytes_per_second": _rate(
+                sum(item.size_bytes for item in run.documents),
+                run.ingestion_duration_ms,
+            ),
         },
+        "faithfulness": _faithfulness_report(run.cases, include_answers=run.include_answers),
+        "turn_measurements": _turn_measurement_report(run.cases),
     }
     if not run.cases:
         report["metrics"] = None
@@ -76,6 +89,87 @@ def build_aggregate_report(run: EvaluationRunRecord) -> dict[str, Any]:
                 "ci_high": None,
             }
     return report
+
+
+def _faithfulness_report(
+    cases: tuple[EvaluationCaseRecord, ...],
+    *,
+    include_answers: bool,
+) -> dict[str, object] | None:
+    if not include_answers:
+        return None
+    available = [item for item in cases if item.faithfulness is not None]
+    aggregate = aggregate_faithfulness(
+        [dict(item.faithfulness or {}) for item in available]
+    )
+    if aggregate is None:
+        return None
+    categories = sorted({item.category for item in available})
+    aggregate["by_category"] = {
+        category: aggregate_faithfulness(
+            [
+                dict(item.faithfulness or {})
+                for item in available
+                if item.category == category
+            ]
+        )
+        for category in categories
+    }
+    return aggregate
+
+
+def _turn_measurement_report(
+    cases: tuple[EvaluationCaseRecord, ...],
+) -> dict[str, object] | None:
+    measurements = [item.measurement for item in cases if item.measurement is not None]
+    if not measurements:
+        return None
+    stage_names = sorted(
+        {
+            name
+            for measurement in measurements
+            for name in _mapping(measurement.get("latency_ms"))
+        }
+    )
+    latency: dict[str, dict[str, float]] = {}
+    for name in stage_names:
+        values = sorted(
+            float(stage[name])
+            for measurement in measurements
+            for stage in [_mapping(measurement.get("latency_ms"))]
+            if name in stage
+        )
+        latency[name] = {
+            "p50": _percentile(values, 0.50),
+            "p95": _percentile(values, 0.95),
+            "p99": _percentile(values, 0.99),
+        }
+    token_totals: Counter[str] = Counter()
+    cache_counts: dict[str, Counter[str]] = {}
+    estimated_spend = 0.0
+    unpriced_tokens = 0
+    for measurement in measurements:
+        token_totals.update(
+            {key: int(value) for key, value in _mapping(measurement.get("tokens")).items()}
+        )
+        for cache_name, status in _mapping(measurement.get("cache")).items():
+            cache_counts.setdefault(cache_name, Counter())[str(status)] += 1
+        cost = _mapping(measurement.get("cost"))
+        estimated_spend += float(cost.get("estimated_api_spend") or 0.0)
+        unpriced_tokens += int(cost.get("unpriced_token_count") or 0)
+    return {
+        "schema_version": 1,
+        "turn_count": len(measurements),
+        "latency_ms": latency,
+        "token_totals": dict(token_totals),
+        "cache": {name: dict(counts) for name, counts in cache_counts.items()},
+        "cost": {
+            "currency": "USD",
+            "estimated_api_spend": round(estimated_spend, 8),
+            "estimate_complete": unpriced_tokens == 0,
+            "unpriced_token_count": unpriced_tokens,
+        },
+    }
 
 
 def write_evaluation_artifacts(
@@ -195,6 +289,10 @@ def _markdown_report(run: EvaluationRunRecord, aggregate: dict[str, Any]) -> str
                 f"- Ingestion duration: {_fmt_value(duration)} ms",
                 f"- Chunks: {ingestion.get('total_chunk_count')}",
                 f"- Embedding inputs: {ingestion.get('embedding_input_count')}",
+                f"- Embedding tokens: {ingestion.get('embedding_token_count')}",
+                f"- Ingestion throughput: "
+                f"{_fmt_value(ingestion.get('documents_per_second'))} Documents/s, "
+                f"{_fmt_value(ingestion.get('bytes_per_second'))} bytes/s",
                 f"- Storage estimate: {ingestion.get('storage_estimate_bytes')} bytes",
                 f"- Chunking config hash: `{ingestion.get('chunking_config_hash')}`",
                 "",
@@ -214,6 +312,61 @@ def _markdown_report(run: EvaluationRunRecord, aggregate: dict[str, Any]) -> str
             rendered = "not run" if value is None else f"{value:.4f}"
             lines.append(f"| `{name}` | {rendered} |")
         lines.append("")
+    faithfulness = aggregate.get("faithfulness")
+    if isinstance(faithfulness, dict):
+        lines.extend(
+            [
+                "## Answer faithfulness",
+                "",
+                f"- Evaluator: `{faithfulness.get('evaluator')}` "
+                f"v`{faithfulness.get('evaluator_version')}`",
+                f"- Human audit rate: {_fmt_metric(faithfulness.get('human_audit_rate'))}",
+                "",
+                "| Metric | Value |",
+                "| --- | ---: |",
+            ]
+        )
+        for name in (
+            "citation_precision",
+            "citation_recall",
+            "claim_citation_coverage",
+            "unsupported_citation_rate",
+            "refusal_correctness",
+            "answer_completeness",
+            "claim_support",
+        ):
+            lines.append(f"| `{name}` | {_fmt_metric(faithfulness.get(name))} |")
+        lines.append("")
+    turn_measurements = aggregate.get("turn_measurements")
+    if isinstance(turn_measurements, dict):
+        lines.extend(
+            [
+                "## Latency, tokens, cache, and cost",
+                "",
+                "| Stage | p50 (ms) | p95 (ms) | p99 (ms) |",
+                "| --- | ---: | ---: | ---: |",
+            ]
+        )
+        latency = _mapping(turn_measurements.get("latency_ms"))
+        for name in sorted(latency):
+            percentiles = _mapping(latency[name])
+            lines.append(
+                f"| `{name}` | {_fmt_metric(percentiles.get('p50'))} | "
+                f"{_fmt_metric(percentiles.get('p95'))} | "
+                f"{_fmt_metric(percentiles.get('p99'))} |"
+            )
+        cost = _mapping(turn_measurements.get("cost"))
+        lines.extend(
+            [
+                "",
+                f"- Estimated API spend: {cost.get('estimated_api_spend')} "
+                f"{cost.get('currency', 'USD')}",
+                f"- Unpriced tokens: {cost.get('unpriced_token_count')}",
+                "- Cache outcomes: `"
+                f"{json.dumps(turn_measurements.get('cache', {}), sort_keys=True)}`",
+                "",
+            ]
+        )
     by_split = aggregate.get("by_split")
     if isinstance(by_split, dict) and by_split:
         lines.extend(
@@ -324,3 +477,24 @@ def _fmt_value(value: object) -> str:
 
 def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
+
+
+def _rate(value: int, duration_ms: float | None) -> float | None:
+    if duration_ms is None or duration_ms <= 0:
+        return None
+    return round(value / (duration_ms / 1_000), 4)
+
+
+def _mapping(value: object) -> dict[str, object]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _percentile(values: list[float], probability: float) -> float:
+    if not values:
+        return 0.0
+    position = (len(values) - 1) * probability
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return values[lower]
+    return values[lower] * (upper - position) + values[upper] * (position - lower)

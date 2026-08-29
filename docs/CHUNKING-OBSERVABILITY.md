@@ -19,6 +19,11 @@ The events are:
 - `rag_turn_failure`: terminal turn stage and a bounded failure category. Retrieval failure
   rate can be calculated from failures whose terminal stage is `retrieving`.
 
+Request- and task-scoped records additionally carry a `correlation_id` field: the
+`X-Request-ID` assigned by the API middleware and propagated to Celery tasks
+(`docs/OBSERVABILITY.md`). Background events without an active request or task context
+keep the historical schema without that field.
+
 Insufficient-evidence rate is calculated from `retrieval_decision` records where
 `sufficient` is false. Neighbor expansion frequency is the proportion of retrieval records
 where `neighbor_expansion_count` or `parent_promotion_count` is non-zero.

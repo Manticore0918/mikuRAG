@@ -131,6 +131,16 @@ class KnowledgeBase(TimestampMixin, Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
     description: Mapped[str | None] = mapped_column(Text)
+    index_generation: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "index_generation >= 0",
+            name="knowledge_bases_index_generation_ck",
+        ),
+    )
 
 
 class KnowledgeBaseAccess(Base):

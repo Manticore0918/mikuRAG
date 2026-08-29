@@ -34,6 +34,7 @@ from app.evaluation.datasets import (
     load_executable_dataset,
     passage_matches_locator,
 )
+from app.evaluation.faithfulness import evaluate_answer_faithfulness
 from app.evaluation.reporting import build_aggregate_report, write_evaluation_artifacts
 from app.ingestion.chunkers import (
     _CHUNKER_PROFILES,
@@ -43,7 +44,9 @@ from app.ingestion.chunkers import (
 from app.ingestion.dispatch import enqueue_ingestion
 from app.ingestion.embeddings import embed_texts
 from app.ingestion.storage import remove_stored_file_sync, storage_path
+from app.ingestion.tokenization import create_tokenizer
 from app.models import Chunk, ChunkLevel, Document, DocumentStatus, KnowledgeBase
+from app.rag.cache import get_derived_cache, query_embedding
 from app.rag.generation import GenerationProviderError, complete_json
 from app.rag.grounding import HistoryMessage, RenderedAnswer
 from app.rag.query_plan import build_query_plan
@@ -57,6 +60,7 @@ from app.rag.retrieval_types import (
     RetrievalMode,
 )
 from app.rag.service import INSUFFICIENT_EVIDENCE, generate_grounded_answer
+from app.rag.turn_measurement import build_turn_measurement
 
 logger = logging.getLogger(__name__)
 
@@ -138,16 +142,22 @@ class DatabaseEvaluationRuntime:
             if retrieval_mode is not None
             else self.settings.retrieval_mode
         )
-        self.reranker = build_reranker(reranker_provider, self.settings)
+        setting_updates: dict[str, object] = {}
+        if bm25_hybrid_enabled is not None:
+            setting_updates["bm25_hybrid_enabled"] = bm25_hybrid_enabled
+        if reranker_provider is not None:
+            setting_updates["reranker_provider"] = reranker_provider
         self.effective_settings = (
-            self.settings.model_copy(update={"bm25_hybrid_enabled": bm25_hybrid_enabled})
-            if bm25_hybrid_enabled is not None
+            self.settings.model_copy(update=setting_updates)
+            if setting_updates
             else self.settings
         )
+        self.reranker = build_reranker(reranker_provider, self.effective_settings)
         self.query_planning = query_planning
         self._ingestion_started = 0.0
         self._ingestion_duration_ms: float | None = None
         self._embedding_input_count = 0
+        self._embedding_token_count = 0
         self._total_chunk_count = 0
         self._storage_estimate_bytes = 0
 
@@ -301,6 +311,7 @@ class DatabaseEvaluationRuntime:
                 self._ingestion_duration_ms = (perf_counter() - self._ingestion_started) * 1_000
                 self._total_chunk_count = sum(item.chunk_count for item in records)
                 self._embedding_input_count = await self._count_embedding_inputs(workspace)
+                self._embedding_token_count = await self._count_embedding_tokens(workspace)
                 return records
             if asyncio.get_running_loop().time() >= deadline:
                 records = await self._document_records(workspace, dataset, documents)
@@ -321,12 +332,13 @@ class DatabaseEvaluationRuntime:
         case_started = perf_counter()
         metrics = RetrievalMetrics()
         query_plan: QueryPlan | None = None
+        rewrite_usage: dict[str, int] = {}
         history = [
             HistoryMessage(role=item.role, content=item.content)
             for item in case.history
         ]
         if self.query_planning:
-            plan, _ = await build_query_plan(
+            plan, rewrite_usage = await build_query_plan(
                 case.query,
                 history,
                 self.effective_settings,
@@ -335,9 +347,38 @@ class DatabaseEvaluationRuntime:
             )
             query_plan = plan
         query = query_plan.effective_query if query_plan is not None else case.query
-        vector = (await embed_texts([query], settings=self.effective_settings))[0]
         retrieval_filters = _retrieval_filters_for_case(case, workspace)
+        effective_filters = (
+            retrieval_filters
+            if not retrieval_filters.is_empty() or query_plan is None
+            else query_plan.inferred_filters
+        )
+        cache = get_derived_cache(self.effective_settings)
+        embedding_started = perf_counter()
         async with self.sessions() as session:
+            index_generation = await session.scalar(
+                select(KnowledgeBase.index_generation).where(
+                    KnowledgeBase.id == workspace.knowledge_base_id
+                )
+            )
+
+            async def compute_embedding() -> list[float]:
+                return (
+                    await embed_texts([query], settings=self.effective_settings)
+                )[0]
+
+            vector, embedding_cache_status = await query_embedding(
+                cache,
+                knowledge_base_id=workspace.knowledge_base_id,
+                index_generation=int(index_generation or 0),
+                query_text=query,
+                filters=effective_filters,
+                settings=self.effective_settings,
+                mode=self.retrieval_mode,
+                compute=compute_embedding,
+            )
+            metrics.query_embedding_ms = (perf_counter() - embedding_started) * 1_000
+            metrics.query_embedding_cache_status = embedding_cache_status
             evidence, sufficient = await retrieve_evidence(
                 session,
                 workspace.knowledge_base_id,
@@ -346,9 +387,11 @@ class DatabaseEvaluationRuntime:
                 self.effective_settings,
                 mode=self.retrieval_mode,
                 reranker=self.reranker,
-                filters=retrieval_filters,
+                filters=effective_filters,
                 query_plan=query_plan,
                 metrics=metrics,
+                cache=cache,
+                index_generation=int(index_generation or 0),
             )
         evidence_records = tuple(_evidence_record(item) for item in evidence)
         filter_correct = _filter_correct(dataset, workspace, case, evidence_records)
@@ -368,6 +411,9 @@ class DatabaseEvaluationRuntime:
         )
         answer: EvaluationAnswerRecord | None = None
         answer_faithful = True
+        faithfulness: dict[str, object] | None = None
+        generation_usage: dict[str, int] = {}
+        stage_timings: dict[str, float] = {}
         if include_answers:
             try:
                 if sufficient:
@@ -375,6 +421,7 @@ class DatabaseEvaluationRuntime:
                         case.query,
                         history,
                         evidence,
+                        stage_timings=stage_timings,
                     )
                 else:
                     rendered = RenderedAnswer(
@@ -383,6 +430,7 @@ class DatabaseEvaluationRuntime:
                         outcome="insufficient_evidence",
                     )
                     usage = {}
+                generation_usage = dict(usage)
             except GenerationProviderError as error:
                 logger.warning(
                     "Grounded answer generation failed for evaluation case %s: %s",
@@ -423,6 +471,33 @@ class DatabaseEvaluationRuntime:
                     usage=dict(usage),
                 )
                 citation_pages = _citation_pages(rendered.used_evidence)
+                faithfulness = evaluate_answer_faithfulness(
+                    case,
+                    content=rendered.content,
+                    outcome=rendered.outcome,
+                    used_passage_ids=used_passages,
+                ).as_dict()
+                answer_faithful = bool(
+                    faithfulness["claim_support"] == 1.0
+                    and faithfulness["citation_precision"] == 1.0
+                    and faithfulness["citation_recall"] == 1.0
+                    and faithfulness["refusal_correctness"] == 1.0
+                    and faithfulness["answer_completeness"] == 1.0
+                )
+        end_to_end_latency_ms = (perf_counter() - case_started) * 1_000
+        combined_usage = _merged_usage(rewrite_usage, generation_usage)
+        measurement = build_turn_measurement(
+            settings=self.effective_settings,
+            retrieval=metrics,
+            usage=combined_usage,
+            embedding_tokens=create_tokenizer(
+                self.effective_settings.chunk_tokenizer
+            ).count(query),
+            generation_ms=stage_timings.get("generation", 0.0),
+            validation_ms=stage_timings.get("validation", 0.0),
+            persistence_ms=0.0,
+            total_ms=end_to_end_latency_ms,
+        )
         return EvaluationCaseRecord(
             case_id=case.case_id,
             category=case.category,
@@ -439,7 +514,7 @@ class DatabaseEvaluationRuntime:
             retrieval_passed=retrieval_passed,
             answer_faithful=answer_faithful,
             retrieval_latency_ms=metrics.retrieval_duration_ms,
-            end_to_end_latency_ms=(perf_counter() - case_started) * 1_000,
+            end_to_end_latency_ms=end_to_end_latency_ms,
             evidence_tokens=metrics.evidence_token_count,
             used_summary_path=False,
             retrieval_metrics=asdict(metrics),
@@ -457,6 +532,13 @@ class DatabaseEvaluationRuntime:
             preserved_identifiers=(
                 query_plan.preserved_identifiers if query_plan is not None else ()
             ),
+            expected_claims=tuple(asdict(item) for item in case.expected_claims),
+            acceptable_answer_facts=case.acceptable_answer_facts,
+            required_evidence=case.required_evidence,
+            refusal_expected=case.refusal_expected,
+            conflicting_evidence=case.conflicting_evidence,
+            faithfulness=faithfulness,
+            measurement=measurement,
         )
 
     async def cleanup(self, workspace: EvaluationWorkspace) -> None:
@@ -561,10 +643,26 @@ class DatabaseEvaluationRuntime:
                 or 0
             )
 
+    async def _count_embedding_tokens(
+        self,
+        workspace: EvaluationWorkspace,
+    ) -> int:
+        async with self.sessions() as session:
+            return int(
+                await session.scalar(
+                    select(func.coalesce(func.sum(Chunk.token_count), 0)).where(
+                        Chunk.document_id.in_(tuple(workspace.document_ids.values())),
+                        Chunk.embedding_model.is_not(None),
+                    )
+                )
+                or 0
+            )
+
     def ingestion_statistics(self) -> dict[str, object]:
         return {
             "ingestion_duration_ms": self._ingestion_duration_ms,
             "embedding_input_count": self._embedding_input_count,
+            "embedding_token_count": self._embedding_token_count,
             "total_chunk_count": self._total_chunk_count,
             "storage_estimate_bytes": self._storage_estimate_bytes,
         }
@@ -729,6 +827,7 @@ async def execute_evaluation(
         embedding_input_count=int(ingestion_stats.get("embedding_input_count") or 0),
         total_chunk_count=int(ingestion_stats.get("total_chunk_count") or 0),
         storage_estimate_bytes=int(ingestion_stats.get("storage_estimate_bytes") or 0),
+        embedding_token_count=int(ingestion_stats.get("embedding_token_count") or 0),
     )
     aggregate = build_aggregate_report(run)
     artifacts = write_evaluation_artifacts(options.output_dir, run, aggregate)
@@ -801,6 +900,14 @@ def _unjudged_ids(
 
 def _ordered_unique(values) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
+
+
+def _merged_usage(*items: dict[str, int]) -> dict[str, int]:
+    merged: dict[str, int] = {}
+    for item in items:
+        for key, value in item.items():
+            merged[key] = merged.get(key, 0) + value
+    return merged
 
 
 def _filter_correct(

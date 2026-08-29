@@ -1,0 +1,32 @@
+{
+  "answer_case_count": 0,
+  "answer_failure_count": 0,
+  "by_category": {},
+  "by_split": {},
+  "case_count": 0,
+  "confidence_intervals": null,
+  "configuration": {},
+  "document_count": 0,
+  "evaluation_set_version": "gold_v1",
+  "faithfulness": null,
+  "include_answers": false,
+  "ingestion": {
+    "bytes_per_second": null,
+    "chunking_config_hash": null,
+    "documents_per_second": null,
+    "embedding_input_count": 0,
+    "embedding_token_count": 0,
+    "ingestion_duration_ms": null,
+    "storage_estimate_bytes": 0,
+    "total_chunk_count": 0
+  },
+  "knowledge_base_cleaned_up": true,
+  "metrics": null,
+  "ready_document_count": 0,
+  "retrieval_pass_rate": null,
+  "run_id": "empty-md",
+  "safe_error": "boom",
+  "schema_version": 1,
+  "status": "failed",
+  "turn_measurements": null
+}

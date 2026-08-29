@@ -1,0 +1,77 @@
+# Initial SLO-style alert examples for the mikuRAG observability profile.
+#
+# These are starting points, not tuned production thresholds: the plan asks
+# for "initial SLOs" and each rule links to the dashboard that explains it.
+# Metric names follow the OpenTelemetry-to-Prometheus mapping of the
+# collector's prometheus exporter (dots become underscores, counters gain
+# _total, durations gain a unit suffix).
+groups:
+  - name: mikurag-retrieval-and-generation
+    interval: 30s
+    rules:
+      - alert: MikuragRetrievalP95OverBudget
+        expr: >-
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(mikurag_rag_stage_duration_seconds_bucket{stage="retrieval"}[15m]))
+          ) > 1.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Retrieval p95 exceeded the 1500 ms budget for 15m"
+          description: >-
+            The acceptance gate allows a 1500 ms retrieval p95
+            (MIKURAG_ACCEPTANCE_RETRIEVAL_P95_TARGET_MS). See the "RAG stage
+            latency" panel.
+
+      - alert: MikuragTurnFailureRateHigh
+        expr: >-
+          sum(rate(mikurag_rag_turns_total{outcome="failed"}[30m]))
+          / clamp_min(sum(rate(mikurag_rag_turns_total[30m])), 0.001) > 0.05
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 5% of RAG turns failed over 30m"
+
+      - alert: MikuragInsufficientEvidenceRateHigh
+        expr: >-
+          sum(rate(mikurag_rag_turns_total{outcome="insufficient_evidence"}[30m]))
+          / clamp_min(sum(rate(mikurag_rag_turns_total[30m])), 0.001) > 0.3
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "More than 30% of turns ended without sufficient evidence"
+          description: >-
+            Usually a retrieval or corpus problem rather than a generation
+            problem. Compare with per-category evaluation results.
+
+  - name: mikurag-ingestion
+    interval: 30s
+    rules:
+      - alert: MikuragIngestionFailureRateHigh
+        expr: >-
+          sum(rate(mikurag_ingestion_documents_total{outcome="failed"}[30m]))
+          / clamp_min(sum(rate(mikurag_ingestion_documents_total[30m])), 0.001) > 0.05
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 5% of ingested Documents failed over 30m"
+
+  - name: mikurag-cache
+    interval: 30s
+    rules:
+      - alert: MikuragCacheErrorRateHigh
+        expr: >-
+          sum(rate(mikurag_cache_operations_total{result="error"}[30m])) > 0.1
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "Derived-cache errors are frequent (fail-open, no user impact)"
+          description: >-
+            Cache reads/writes degrade to the uncached path by design; a
+            sustained error rate usually means Redis is unhealthy.

@@ -16,9 +16,12 @@ from app.api import (
     uploads,
 )
 from app.config import get_settings
+from app.correlation import CorrelationIdMiddleware, connect_celery_signals, install_record_factory
 from app.database import close_database, session_factory
 from app.health import readiness
+from app.rag.cache import close_derived_cache
 from app.rate_limit import login_rate_limiter
+from app.telemetry import setup_telemetry, shutdown_telemetry
 from app.uploads.cleanup import reconcile_upload_sessions
 
 logger = logging.getLogger(__name__)
@@ -32,11 +35,15 @@ async def lifespan(_: FastAPI):
     except Exception:
         logger.exception("Upload Session startup reconciliation failed")
     yield
+    await close_derived_cache()
     await login_rate_limiter.close()
     await close_database()
+    shutdown_telemetry()
 
 
 def create_app() -> FastAPI:
+    install_record_factory()
+    connect_celery_signals()
     settings = get_settings()
     app = FastAPI(
         title="mikuRAG API",
@@ -52,12 +59,19 @@ def create_app() -> FastAPI:
         allow_headers=[
             "Content-Type",
             "X-CSRF-Token",
+            "X-Request-ID",
             "X-Upload-Length",
             "X-Upload-Offset",
             "X-Upload-SHA256",
         ],
         allow_origins=settings.cors_origins,
     )
+    # Added after CORS, and the OpenTelemetry server middleware (installed in
+    # setup_telemetry) is added after this one, so the middleware nesting is
+    # OTel server span -> correlation -> CORS -> routes: every response carries
+    # an X-Request-ID and request-scoped spans can find it.
+    app.add_middleware(CorrelationIdMiddleware)
+    setup_telemetry(app)
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(knowledge_bases.router, prefix="/api/v1")
     app.include_router(admin.router, prefix="/api/v1")

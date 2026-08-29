@@ -1,0 +1,82 @@
+name: Evaluation
+
+# Scheduled/manual full evaluation with real providers. This job uses
+# protected repository secrets, so it only runs on the origin repository
+# (never for fork pull requests) and is never required for CI.
+
+on:
+  workflow_call:
+    inputs:
+      max_cases:
+        description: "Limit to the first N cases (empty = full dataset)"
+        required: false
+        type: string
+        default: ""
+      artifact_name:
+        description: "Name of the uploaded evaluation artifact"
+        required: false
+        type: string
+        default: evaluation-results
+  workflow_dispatch:
+    inputs:
+      max_cases:
+        description: "Limit to the first N cases (empty = full dataset)"
+        required: false
+        type: string
+        default: ""
+  schedule:
+    - cron: "0 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  full-evaluation:
+    name: Full provider-backed evaluation
+    runs-on: ubuntu-latest
+    if: github.repository == 'Manticore0918/mikuRAG'
+    environment: evaluation
+    env:
+      MIKURAG_EMBEDDING_API_KEY: ${{ secrets.MIKURAG_EMBEDDING_API_KEY }}
+      MIKURAG_GENERATION_API_KEY: ${{ secrets.MIKURAG_GENERATION_API_KEY }}
+      MIKURAG_GENERATION_BASE_URL: ${{ vars.MIKURAG_GENERATION_BASE_URL }}
+      MIKURAG_GENERATION_MODEL_ID: ${{ vars.MIKURAG_GENERATION_MODEL_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate protected provider configuration
+        run: |
+          test -n "$MIKURAG_EMBEDDING_API_KEY" || { echo "Missing MIKURAG_EMBEDDING_API_KEY" >&2; exit 1; }
+          test -n "$MIKURAG_GENERATION_API_KEY" || { echo "Missing MIKURAG_GENERATION_API_KEY" >&2; exit 1; }
+          test -n "$MIKURAG_GENERATION_BASE_URL" || { echo "Missing MIKURAG_GENERATION_BASE_URL" >&2; exit 1; }
+          test -n "$MIKURAG_GENERATION_MODEL_ID" || { echo "Missing MIKURAG_GENERATION_MODEL_ID" >&2; exit 1; }
+      - name: Prepare .env
+        run: |
+          cat > .env <<'EOF'
+          MIKURAG_ENVIRONMENT=test
+          MIKURAG_SESSION_SECRET=eval-session-secret-0123456789abcdef
+          MIKURAG_ENCRYPTION_MASTER_KEY=eval-encryption-key-0123456789abcdef
+          POSTGRES_PASSWORD=eval-postgres-password
+          EOF
+      - name: Start infrastructure and migrate
+        run: |
+          docker compose -p mikurag-eval up -d --wait postgres redis
+          docker compose -p mikurag-eval --profile tools build migrate
+          docker compose -p mikurag-eval --profile tools run --rm migrate
+      - name: Run the full evaluation
+        env:
+          MAX_CASES: ${{ inputs.max_cases }}
+        run: |
+          ARGS=()
+          if [ -n "$MAX_CASES" ]; then
+            ARGS=(--max-cases "$MAX_CASES")
+          fi
+          docker compose -p mikurag-eval --profile tools run --rm \
+            evaluate python -m app.evaluation_cli run --answers "${ARGS[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name || 'evaluation-results' }}
+          path: backend/evaluation/results/
+          retention-days: 90
+      - name: Tear down
+        if: always()
+        run: docker compose -p mikurag-eval down -v --remove-orphans

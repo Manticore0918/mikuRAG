@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.rag.retrieval_types import RetrievalMode
@@ -94,6 +94,14 @@ class Settings(BaseSettings):
     reranker_timeout_seconds: float = Field(default=15, ge=1, le=120)
     reranker_max_concurrency: int = Field(default=1, ge=1, le=8)
     query_rewrite_timeout_seconds: float = Field(default=10, ge=1, le=120)
+    query_embedding_cache_enabled: bool = False
+    retrieval_cache_enabled: bool = False
+    rag_cache_ttl_seconds: int = Field(default=900, ge=30, le=86_400)
+    rag_cache_max_entry_bytes: int = Field(
+        default=262_144,
+        ge=16_384,
+        le=4_194_304,
+    )
     acceptance_min_quality_improvement: float = Field(default=0.02, ge=0, le=1)
     acceptance_retrieval_p95_target_ms: float = Field(
         default=1_500,
@@ -111,6 +119,25 @@ class Settings(BaseSettings):
     ingestion_stale_after_seconds: int = Field(default=900, ge=60, le=86_400)
     ingestion_busy_retry_seconds: int = Field(default=30, ge=5, le=300)
     stale_turn_seconds: int = Field(default=900, ge=60, le=86_400)
+    otel_enabled: bool = False
+    otel_service_name: str = Field(
+        default="mikurag",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-zA-Z0-9._-]+$",
+    )
+    otel_exporter_endpoint: str = "http://localhost:4318"
+    otel_exporter_timeout_seconds: float = Field(default=10, ge=1, le=60)
+    otel_trace_sample_ratio: float = Field(default=1.0, ge=0, le=1)
+    otel_metric_export_interval_ms: int = Field(default=60_000, ge=1_000, le=3_600_000)
+
+    @field_validator("otel_exporter_endpoint")
+    @classmethod
+    def require_otel_http_url(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("otel_exporter_endpoint must use http:// or https://")
+        return value.rstrip("/")
 
     @field_validator("database_url")
     @classmethod
@@ -128,10 +155,17 @@ class Settings(BaseSettings):
 
     @field_validator("embedding_endpoint")
     @classmethod
-    def require_embedding_https(cls, value: str) -> str:
-        if not value.startswith("https://"):
-            raise ValueError("embedding_endpoint must use https://")
-        return value
+    def require_embedding_https(cls, value: str, info: ValidationInfo) -> str:
+        # The `test` environment is the only place a plain-HTTP provider is
+        # acceptable: it exists so the CI compose smoke can point at the
+        # in-network stub. Development and production always require HTTPS.
+        environment = info.data.get("environment", "development")
+        parsed = urlparse(value)
+        if parsed.scheme == "https":
+            return value
+        if environment == "test" and parsed.scheme == "http":
+            return value
+        raise ValueError("embedding_endpoint must use https://")
 
     @field_validator("embedding_api_key", mode="before")
     @classmethod
@@ -145,9 +179,12 @@ class Settings(BaseSettings):
 
     @field_validator("generation_base_url")
     @classmethod
-    def require_safe_generation_url(cls, value: str) -> str:
+    def require_safe_generation_url(cls, value: str, info: ValidationInfo) -> str:
+        environment = info.data.get("environment", "development")
         parsed = urlparse(value)
         if parsed.scheme == "https":
+            return value.rstrip("/")
+        if environment == "test" and parsed.scheme == "http":
             return value.rstrip("/")
         local_hosts = {"localhost", "127.0.0.1", "::1", "host.docker.internal", "ollama"}
         if parsed.scheme == "http" and parsed.hostname in local_hosts:

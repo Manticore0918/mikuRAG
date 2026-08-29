@@ -92,14 +92,19 @@ def test_retrieval_evaluator_measures_quality_latency_and_evidence_usage() -> No
     assert metrics.filter_correctness is None
     assert metrics.mean_retrieval_latency_ms == 15
     assert metrics.retrieval_latency_p95_ms == pytest.approx(19.5)
+    assert metrics.retrieval_latency_p50_ms == pytest.approx(15.0)
+    assert metrics.retrieval_latency_p99_ms == pytest.approx(19.9)
     assert metrics.mean_end_to_end_latency_ms == 40
     assert metrics.end_to_end_latency_p95_ms == pytest.approx(49.0)
+    assert metrics.end_to_end_latency_p50_ms == pytest.approx(40.0)
+    assert metrics.end_to_end_latency_p99_ms == pytest.approx(49.8)
     assert metrics.mean_evidence_tokens == 50
 
 
 def test_evaluation_comparison_reports_candidate_deltas() -> None:
-    baseline = RetrievalEvaluationMetrics(*([1.0] * 16))
-    candidate = RetrievalEvaluationMetrics(*([1.5] * 16))
+    field_count = len(RetrievalEvaluationMetrics.__dataclass_fields__)
+    baseline = RetrievalEvaluationMetrics(*([1.0] * field_count))
+    candidate = RetrievalEvaluationMetrics(*([1.5] * field_count))
 
     delta = compare_evaluations(baseline, candidate)
 

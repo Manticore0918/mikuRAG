@@ -1,0 +1,21 @@
+# Prometheus scraper for the mikuRAG `observability` Compose profile.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules.yml
+
+scrape_configs:
+  - job_name: mikurag-otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]
+  # Collector self-telemetry (otelcol_* metrics such as
+  # otelcol_receiver_accepted_spans). Exposed on :8888, separate from the
+  # app-metric Prometheus exporter on :8889.
+  - job_name: mikurag-otel-collector-self
+    static_configs:
+      - targets: ["otel-collector:8888"]
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

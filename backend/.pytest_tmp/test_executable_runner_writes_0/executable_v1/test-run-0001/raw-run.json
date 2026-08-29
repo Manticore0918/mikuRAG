@@ -1,0 +1,373 @@
+{
+  "cases": [
+    {
+      "acceptable_answer_facts": [],
+      "answer": {
+        "content": "Grounded fixture answer",
+        "expected_terms_found": true,
+        "outcome": "grounded_answer",
+        "safe_error": null,
+        "usage": {
+          "output_tokens": 4
+        },
+        "used_passage_ids": [
+          "hr-leave-p3"
+        ]
+      },
+      "answer_faithful": true,
+      "case_id": "narrow_leave_limit",
+      "category": "narrow_fact",
+      "citation_pages": [],
+      "conflicting_evidence": false,
+      "effective_query": null,
+      "end_to_end_latency_ms": 12.0,
+      "evidence": [],
+      "evidence_tokens": 40,
+      "expected_citation_pages": [],
+      "expected_claims": [],
+      "expects_supported_answer": true,
+      "faithfulness": null,
+      "filter_correct": null,
+      "filters": {},
+      "history": [],
+      "measurement": null,
+      "preserved_identifiers": [],
+      "query": "What is the annual leave carry-over limit?",
+      "refusal_expected": false,
+      "relevance_grades": {},
+      "relevant_passage_ids": [
+        "hr-leave-p3"
+      ],
+      "required_evidence": [],
+      "required_passage_ids": [
+        "hr-leave-p3"
+      ],
+      "reranked_passage_ids": [
+        "hr-leave-p3"
+      ],
+      "retrieval_latency_ms": 8.0,
+      "retrieval_metrics": {
+        "retrieval_duration_ms": 8.0
+      },
+      "retrieval_passed": true,
+      "retrieved_passage_ids": [
+        "hr-leave-p3"
+      ],
+      "rewrite_status": null,
+      "split": "train",
+      "sufficient": true,
+      "used_summary_path": false
+    },
+    {
+      "acceptable_answer_facts": [],
+      "answer": {
+        "content": "Grounded fixture answer",
+        "expected_terms_found": true,
+        "outcome": "grounded_answer",
+        "safe_error": null,
+        "usage": {
+          "output_tokens": 4
+        },
+        "used_passage_ids": [
+          "security-codes-p8"
+        ]
+      },
+      "answer_faithful": true,
+      "case_id": "lexical_incident_code",
+      "category": "lexical_exact",
+      "citation_pages": [],
+      "conflicting_evidence": false,
+      "effective_query": null,
+      "end_to_end_latency_ms": 12.0,
+      "evidence": [],
+      "evidence_tokens": 40,
+      "expected_citation_pages": [],
+      "expected_claims": [],
+      "expects_supported_answer": true,
+      "faithfulness": null,
+      "filter_correct": null,
+      "filters": {},
+      "history": [],
+      "measurement": null,
+      "preserved_identifiers": [],
+      "query": "What actions does incident code SEC-417 require?",
+      "refusal_expected": false,
+      "relevance_grades": {},
+      "relevant_passage_ids": [
+        "security-codes-p8"
+      ],
+      "required_evidence": [],
+      "required_passage_ids": [
+        "security-codes-p8"
+      ],
+      "reranked_passage_ids": [
+        "security-codes-p8"
+      ],
+      "retrieval_latency_ms": 8.0,
+      "retrieval_metrics": {
+        "retrieval_duration_ms": 8.0
+      },
+      "retrieval_passed": true,
+      "retrieved_passage_ids": [
+        "security-codes-p8"
+      ],
+      "rewrite_status": null,
+      "split": "train",
+      "sufficient": true,
+      "used_summary_path": false
+    },
+    {
+      "acceptable_answer_facts": [],
+      "answer": {
+        "content": "Grounded fixture answer",
+        "expected_terms_found": true,
+        "outcome": "grounded_answer",
+        "safe_error": null,
+        "usage": {
+          "output_tokens": 4
+        },
+        "used_passage_ids": [
+          "finance-assets-p12"
+        ]
+      },
+      "answer_faithful": true,
+      "case_id": "semantic_expense_approval",
+      "category": "semantic_paraphrase",
+      "citation_pages": [],
+      "conflicting_evidence": false,
+      "effective_query": null,
+      "end_to_end_latency_ms": 12.0,
+      "evidence": [],
+      "evidence_tokens": 40,
+      "expected_citation_pages": [],
+      "expected_claims": [],
+      "expects_supported_answer": true,
+      "faithfulness": null,
+      "filter_correct": null,
+      "filters": {},
+      "history": [],
+      "measurement": null,
+      "preserved_identifiers": [],
+      "query": "Who must sign off before an employee buys costly equipment?",
+      "refusal_expected": false,
+      "relevance_grades": {},
+      "relevant_passage_ids": [
+        "finance-assets-p12"
+      ],
+      "required_evidence": [],
+      "required_passage_ids": [
+        "finance-assets-p12"
+      ],
+      "reranked_passage_ids": [
+        "finance-assets-p12"
+      ],
+      "retrieval_latency_ms": 8.0,
+      "retrieval_metrics": {
+        "retrieval_duration_ms": 8.0
+      },
+      "retrieval_passed": true,
+      "retrieved_passage_ids": [
+        "finance-assets-p12"
+      ],
+      "rewrite_status": null,
+      "split": "train",
+      "sufficient": true,
+      "used_summary_path": false
+    },
+    {
+      "acceptable_answer_facts": [],
+      "answer": {
+        "content": "Grounded fixture answer",
+        "expected_terms_found": true,
+        "outcome": "grounded_answer",
+        "safe_error": null,
+        "usage": {
+          "output_tokens": 4
+        },
+        "used_passage_ids": [
+          "security-access-p14-15"
+        ]
+      },
+      "answer_faithful": true,
+      "case_id": "temporary_access_controls",
+      "category": "multi_constraint",
+      "citation_pages": [],
+      "conflicting_evidence": false,
+      "effective_query": null,
+      "end_to_end_latency_ms": 12.0,
+      "evidence": [],
+      "evidence_tokens": 40,
+      "expected_citation_pages": [],
+      "expected_claims": [],
+      "expects_supported_answer": true,
+      "faithfulness": null,
+      "filter_correct": null,
+      "filters": {},
+      "history": [],
+      "measurement": null,
+      "preserved_identifiers": [],
+      "query": "What controls and expiry apply to temporary administrator access?",
+      "refusal_expected": false,
+      "relevance_grades": {},
+      "relevant_passage_ids": [
+        "security-access-p14-15"
+      ],
+      "required_evidence": [],
+      "required_passage_ids": [
+        "security-access-p14-15"
+      ],
+      "reranked_passage_ids": [
+        "security-access-p14-15"
+      ],
+      "retrieval_latency_ms": 8.0,
+      "retrieval_metrics": {
+        "retrieval_duration_ms": 8.0
+      },
+      "retrieval_passed": true,
+      "retrieved_passage_ids": [
+        "security-access-p14-15"
+      ],
+      "rewrite_status": null,
+      "split": "train",
+      "sufficient": true,
+      "used_summary_path": false
+    },
+    {
+      "acceptable_answer_facts": [],
+      "answer": {
+        "content": "Grounded fixture answer",
+        "expected_terms_found": true,
+        "outcome": "insufficient_evidence",
+        "safe_error": null,
+        "usage": {
+          "output_tokens": 4
+        },
+        "used_passage_ids": []
+      },
+      "answer_faithful": true,
+      "case_id": "unsupported_office_pet",
+      "category": "unsupported",
+      "citation_pages": [],
+      "conflicting_evidence": false,
+      "effective_query": null,
+      "end_to_end_latency_ms": 12.0,
+      "evidence": [],
+      "evidence_tokens": 0,
+      "expected_citation_pages": [],
+      "expected_claims": [],
+      "expects_supported_answer": false,
+      "faithfulness": null,
+      "filter_correct": null,
+      "filters": {},
+      "history": [],
+      "measurement": null,
+      "preserved_identifiers": [],
+      "query": "What is the office pet's birthday?",
+      "refusal_expected": false,
+      "relevance_grades": {},
+      "relevant_passage_ids": [],
+      "required_evidence": [],
+      "required_passage_ids": [],
+      "reranked_passage_ids": [],
+      "retrieval_latency_ms": 8.0,
+      "retrieval_metrics": {
+        "retrieval_duration_ms": 8.0
+      },
+      "retrieval_passed": true,
+      "retrieved_passage_ids": [],
+      "rewrite_status": null,
+      "split": "train",
+      "sufficient": false,
+      "used_summary_path": false
+    }
+  ],
+  "chunking_config_hash": null,
+  "completed_at": "2026-08-29T09:50:59.149704+00:00",
+  "configuration": {
+    "bootstrap_samples": 2000,
+    "bootstrap_seed": 0,
+    "chunking_version": "legacy",
+    "include_answers": true
+  },
+  "documents": [
+    {
+      "chunk_count": 1,
+      "chunking_config_hash": null,
+      "chunking_version": "legacy",
+      "corpus_document_id": "leave-policy",
+      "document_id": "da4d4da1-336b-4568-9fa0-93302b5f4b3a",
+      "ingestion_attempts": 1,
+      "ingestion_progress": 100,
+      "ingestion_stage": "ready",
+      "original_name": "leave-policy.md",
+      "parser_version": "markdown_v2",
+      "safe_error": null,
+      "size_bytes": 0,
+      "status": "ready",
+      "warnings": []
+    },
+    {
+      "chunk_count": 1,
+      "chunking_config_hash": null,
+      "chunking_version": "legacy",
+      "corpus_document_id": "security-incident",
+      "document_id": "3b80b25d-f82b-4405-87f6-a53eea01b6ee",
+      "ingestion_attempts": 1,
+      "ingestion_progress": 100,
+      "ingestion_stage": "ready",
+      "original_name": "security-incident.md",
+      "parser_version": "markdown_v2",
+      "safe_error": null,
+      "size_bytes": 0,
+      "status": "ready",
+      "warnings": []
+    },
+    {
+      "chunk_count": 1,
+      "chunking_config_hash": null,
+      "chunking_version": "legacy",
+      "corpus_document_id": "asset-approval",
+      "document_id": "b38817bf-4485-49c3-a4da-7a099a9d11d4",
+      "ingestion_attempts": 1,
+      "ingestion_progress": 100,
+      "ingestion_stage": "ready",
+      "original_name": "asset-approval.md",
+      "parser_version": "markdown_v2",
+      "safe_error": null,
+      "size_bytes": 0,
+      "status": "ready",
+      "warnings": []
+    },
+    {
+      "chunk_count": 1,
+      "chunking_config_hash": null,
+      "chunking_version": "legacy",
+      "corpus_document_id": "temporary-access",
+      "document_id": "0ab1c167-94ed-4310-ae5c-4d6026735672",
+      "ingestion_attempts": 1,
+      "ingestion_progress": 100,
+      "ingestion_stage": "ready",
+      "original_name": "temporary-access.md",
+      "parser_version": "markdown_v2",
+      "safe_error": null,
+      "size_bytes": 0,
+      "status": "ready",
+      "warnings": []
+    }
+  ],
+  "embedding_input_count": 4,
+  "embedding_token_count": 0,
+  "evaluation_set_version": "executable_v1",
+  "include_answers": true,
+  "ingestion_duration_ms": 0.0,
+  "knowledge_base_cleaned_up": true,
+  "knowledge_base_id": "05b30806-e776-4797-bf2d-453890711e47",
+  "knowledge_base_name": "Evaluation test",
+  "run_id": "test-run-0001",
+  "safe_error": null,
+  "schema_version": 1,
+  "started_at": "2026-08-29T09:50:59.149304+00:00",
+  "status": "completed",
+  "storage_estimate_bytes": 4096,
+  "total_chunk_count": 4
+}

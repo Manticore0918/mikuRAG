@@ -103,6 +103,13 @@ class EvaluationCaseRecord:
     history: tuple[dict[str, str], ...] = ()
     rewrite_status: str | None = None
     preserved_identifiers: tuple[str, ...] = ()
+    expected_claims: tuple[dict[str, Any], ...] = ()
+    acceptable_answer_facts: tuple[tuple[str, ...], ...] = ()
+    required_evidence: tuple[str, ...] = ()
+    refusal_expected: bool = False
+    conflicting_evidence: bool = False
+    faithfulness: dict[str, Any] | None = None
+    measurement: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -126,6 +133,7 @@ class EvaluationRunRecord:
     embedding_input_count: int = 0
     total_chunk_count: int = 0
     storage_estimate_bytes: int = 0
+    embedding_token_count: int = 0
 
 
 @dataclass(frozen=True)

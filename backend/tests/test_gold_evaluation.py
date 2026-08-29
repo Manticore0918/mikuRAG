@@ -62,10 +62,10 @@ def _chunk_locators(document) -> list[dict]:
     ]
 
 
-def test_gold_manifest_is_schema_two_and_reviewed() -> None:
+def test_gold_manifest_is_schema_three_and_reviewed() -> None:
     dataset = load_executable_dataset(GOLD)
 
-    assert dataset.schema_version == 2
+    assert dataset.schema_version == 3
     assert dataset.version == "gold_v1"
     assert dataset.review_status == "reviewed"
     assert dataset.headline_eligible is False
@@ -82,6 +82,20 @@ def test_gold_cases_are_individually_marked_reviewed() -> None:
     assert payload["headline_eligible"] is False
     for case in payload["cases"]:
         assert case.get("reviewed") is True, case["case_id"]
+
+
+def test_gold_cases_define_claims_facts_evidence_and_refusal_expectations() -> None:
+    dataset = load_executable_dataset(GOLD)
+
+    for case in dataset.cases:
+        assert case.required_evidence == case.required_passage_ids, case.case_id
+        assert case.refusal_expected is (not case.expects_supported_answer), case.case_id
+        assert case.conflicting_evidence is (
+            case.category == "conflicting_evidence"
+        ), case.case_id
+        if case.expects_supported_answer:
+            assert case.expected_claims, case.case_id
+            assert case.acceptable_answer_facts, case.case_id
 
 
 def test_gold_set_contains_reviewed_follow_up_rewrite_cases() -> None:

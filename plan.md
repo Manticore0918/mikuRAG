@@ -361,6 +361,20 @@ Do not fill this table with synthetic placeholder numbers.
 
 ## Checkpoint 4 — Answer faithfulness, cost accounting, and Redis caching
 
+### Status — In progress (started 2026-08-28)
+
+The first implementation slice is complete: schema-v3 expected claims/facts and
+required evidence, a deterministic versioned faithfulness evaluator, redacted
+per-turn stage/token/cache/cost records, p50/p95/p99 reporting, a versioned
+pricing ledger, optional bounded Redis query-embedding and retrieval-ID caches,
+and PostgreSQL Knowledge Base generations for Ready/delete/re-index
+invalidation. All cache behavior remains feature-off by default.
+
+The exit gate is not yet complete. Remaining work is tracked in
+`docs/EVALUATION-CHECKPOINT-4.md`: human claim-map audit/calibration, reviewed
+external prices, PostgreSQL/Redis cold-warm and failure integration tests, and a
+real quality/latency/cost report plus trace-style waterfall.
+
 ### Outcome
 
 mikuRAG can show whether answers are actually supported, what each stage costs,
@@ -424,6 +438,35 @@ representative turn. Explain one tradeoff selected from evidence—for example,
 reranker quality lift versus added p95 latency.
 
 ## Checkpoint 5 — CI/CD and production observability
+
+### Status — Implemented locally (2026-08-28), CI runs pending first push
+
+PR CI is in place (`.github/workflows/ci.yml`: Ruff/pytest, frontend
+lint/test/build, clean- and previous-release Alembic upgrades, real-PostgreSQL
+and Redis integration tests behind the `integration` marker, image builds, and
+a compose smoke with deterministic stub providers, an evaluation subset with
+report-schema validation, and an observability-pipeline check). Tag releases
+publish GHCR images with SBOM/provenance and rollback notes after a protected
+provider-backed evaluation gate, and attach that evaluation report bundle
+(`release.yml`). The scheduled/manual full evaluation is gated to the origin
+repository, while the synthetic capacity workflow needs no provider secrets
+(`evaluation.yml`, `capacity.yml`). Correlation IDs
+(`X-Request-ID` → log records → observations → Celery headers → spans) are
+always on; OpenTelemetry tracing/metrics are flag-gated behind
+`MIKURAG_OTEL_ENABLED` with an optional `otel` extra and a separate
+`compose.observability.yaml` profile stack (collector, Prometheus, Tempo, Grafana with a
+provisioned dashboard and initial SLO rules). Provider stub, failure drills,
+and redaction tests are in `scripts/provider_stub.py`,
+`tests/test_failure_drills.py`, `tests/test_telemetry.py`, and
+`tests/test_correlation.py`; docs live in `docs/OBSERVABILITY.md` and
+`docs/adr/0007-optional-opentelemetry-telemetry.md`.
+
+Remaining for the exit gate: push the branch and confirm the workflow runs
+green on GitHub (the local network cannot reach Docker Hub, so the
+collector/Prometheus/Tempo/Grafana images and the full compose smoke were
+validated by config + unit/SDK-level tests here, not by a live container run),
+then mark required checks in branch protection and tag a release to exercise
+`release.yml` end to end.
 
 ### Outcome
 

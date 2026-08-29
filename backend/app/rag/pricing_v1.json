@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "version": "2026-08-28",
+  "currency": "USD",
+  "models": [
+    {
+      "kind": "generation",
+      "provider": "local",
+      "model": "*",
+      "input_usd_per_million_tokens": 0.0,
+      "output_usd_per_million_tokens": 0.0,
+      "note": "Local generation has zero API spend; compute cost is reported separately."
+    }
+  ]
+}

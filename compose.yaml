@@ -53,6 +53,10 @@ x-backend-environment: &backend-environment
   MIKURAG_RERANKER_MAX_CONCURRENCY: ${MIKURAG_RERANKER_MAX_CONCURRENCY:-1}
   HF_HOME: /data/models/huggingface
   MIKURAG_QUERY_REWRITE_TIMEOUT_SECONDS: ${MIKURAG_QUERY_REWRITE_TIMEOUT_SECONDS:-10}
+  MIKURAG_QUERY_EMBEDDING_CACHE_ENABLED: ${MIKURAG_QUERY_EMBEDDING_CACHE_ENABLED:-false}
+  MIKURAG_RETRIEVAL_CACHE_ENABLED: ${MIKURAG_RETRIEVAL_CACHE_ENABLED:-false}
+  MIKURAG_RAG_CACHE_TTL_SECONDS: ${MIKURAG_RAG_CACHE_TTL_SECONDS:-900}
+  MIKURAG_RAG_CACHE_MAX_ENTRY_BYTES: ${MIKURAG_RAG_CACHE_MAX_ENTRY_BYTES:-262144}
   MIKURAG_ACCEPTANCE_MIN_QUALITY_IMPROVEMENT: ${MIKURAG_ACCEPTANCE_MIN_QUALITY_IMPROVEMENT:-0.02}
   MIKURAG_ACCEPTANCE_RETRIEVAL_P95_TARGET_MS: ${MIKURAG_ACCEPTANCE_RETRIEVAL_P95_TARGET_MS:-1500}
   MIKURAG_WORKER_MEMORY_LIMIT_BYTES: ${MIKURAG_WORKER_MEMORY_LIMIT_BYTES:-1073741824}
@@ -67,17 +71,25 @@ x-backend-environment: &backend-environment
   MIKURAG_GENERATION_BASE_URL: ${MIKURAG_GENERATION_BASE_URL:-http://host.docker.internal:11434/v1}
   MIKURAG_GENERATION_MODEL_ID: ${MIKURAG_GENERATION_MODEL_ID:-DeepSeek-R1-Distill-Qwen-7B}
   MIKURAG_GENERATION_API_KEY: ${MIKURAG_GENERATION_API_KEY:-}
+  MIKURAG_OTEL_ENABLED: ${MIKURAG_OTEL_ENABLED:-false}
+  MIKURAG_OTEL_SERVICE_NAME: ${MIKURAG_OTEL_SERVICE_NAME:-mikurag-backend}
+  MIKURAG_OTEL_EXPORTER_ENDPOINT: ${MIKURAG_OTEL_EXPORTER_ENDPOINT:-http://otel-collector:4318}
+  MIKURAG_OTEL_TRACE_SAMPLE_RATIO: ${MIKURAG_OTEL_TRACE_SAMPLE_RATIO:-1}
+  MIKURAG_OTEL_METRIC_EXPORT_INTERVAL_MS: ${MIKURAG_OTEL_METRIC_EXPORT_INTERVAL_MS:-60000}
 
 services:
   postgres:
     # ParadeDB bundles pg_search (BM25) and pgvector. The pinned tag and SQL
     # dialect are validated by the scripts/spike_pg_search scripts (ADR-0005);
     # stock pgvector remains usable because migration 0010 is guarded.
+    # The preload list must keep pg_cron and pg_stat_statements: the image's
+    # first-boot bootstrap script creates those extensions and aborts fresh
+    # initialization if their libraries are not preloaded.
     image: ${POSTGRES_IMAGE:-paradedb/paradedb:0.25.5-pg16}
     command:
       - postgres
       - -c
-      - shared_preload_libraries=${POSTGRES_SHARED_PRELOAD_LIBRARIES-pg_search}
+      - shared_preload_libraries=${POSTGRES_SHARED_PRELOAD_LIBRARIES-pg_search,pg_cron,pg_stat_statements}
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mikurag}
       POSTGRES_USER: ${POSTGRES_USER:-mikurag}
@@ -148,7 +160,9 @@ services:
   worker:
     build: ./backend
     command: ["celery", "-A", "app.celery_app:celery_app", "worker", "--loglevel=INFO"]
-    environment: *backend-environment
+    environment:
+      <<: *backend-environment
+      MIKURAG_OTEL_SERVICE_NAME: ${MIKURAG_WORKER_OTEL_SERVICE_NAME:-mikurag-worker}
     volumes:
       - uploads:/data/uploads
     depends_on:
@@ -179,6 +193,22 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+
+  # Deterministic model-provider stub for the CI compose smoke test: the
+  # embedding endpoint returns trigram-hash vectors and the generation
+  # endpoint returns valid grounded JSON. Profile "smoke" only.
+  provider-stub:
+    image: python:3.12-slim
+    command: ["python", "/scripts/provider_stub.py"]
+    volumes:
+      - ./scripts:/scripts:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8900/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+    profiles: ["smoke"]
 
 volumes:
   postgres-data:

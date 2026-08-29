@@ -1,0 +1,180 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release-evaluation:
+    name: Provider-backed release quality gate
+    uses: ./.github/workflows/evaluation.yml
+    with:
+      max_cases: ""
+      artifact_name: release-evaluation-results
+    secrets: inherit
+
+  publish-images:
+    name: Publish immutable images to GHCR
+    runs-on: ubuntu-latest
+    needs: release-evaluation
+    steps:
+      - uses: actions/checkout@v4
+      # GHCR image names must be lowercase, while github.repository keeps the
+      # original casing. docker/metadata-action lowercases the pushed refs;
+      # these explicit outputs cover the SBOM pulls and release notes.
+      - name: Resolve lowercase image repository
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Backend image metadata
+        id: backend-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/backend
+          tags: |
+            type=ref,event=tag
+            type=sha,format=long
+          labels: |
+            org.opencontainers.image.title=mikuRAG backend
+            org.opencontainers.image.description=mikuRAG API, worker, and migration image
+      - name: Build and push backend image
+        id: backend-push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.backend-meta.outputs.tags }}
+          labels: ${{ steps.backend-meta.outputs.labels }}
+          annotations: ${{ steps.backend-meta.outputs.annotations }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Frontend image metadata
+        id: frontend-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/frontend
+          tags: |
+            type=ref,event=tag
+            type=sha,format=long
+          labels: |
+            org.opencontainers.image.title=mikuRAG frontend
+            org.opencontainers.image.description=mikuRAG web UI (nginx)
+      - name: Build and push frontend image
+        id: frontend-push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ steps.frontend-meta.outputs.tags }}
+          labels: ${{ steps.frontend-meta.outputs.labels }}
+          annotations: ${{ steps.frontend-meta.outputs.annotations }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Generate backend SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ steps.repo.outputs.name }}/backend:${{ github.ref_name }}
+          format: spdx-json
+          artifact-name: backend-sbom.spdx.json
+          output-file: backend-sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Generate frontend SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ steps.repo.outputs.name }}/frontend:${{ github.ref_name }}
+          format: spdx-json
+          artifact-name: frontend-sbom.spdx.json
+          output-file: frontend-sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-evaluation-results
+          path: release-evaluation-results
+      - name: Release checksums
+        run: |
+          mkdir -p release-artifacts
+          tar -czf release-artifacts/evaluation-results.tar.gz \
+            -C release-evaluation-results .
+          sha256sum backend-sbom.spdx.json frontend-sbom.spdx.json \
+            release-artifacts/evaluation-results.tar.gz \
+            > release-artifacts/checksums-sha256.txt
+          cat release-artifacts/checksums-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: |
+            backend-sbom.spdx.json
+            frontend-sbom.spdx.json
+            release-artifacts/evaluation-results.tar.gz
+            release-artifacts/checksums-sha256.txt
+
+  github-release:
+    name: Tagged release with rollback guidance
+    runs-on: ubuntu-latest
+    needs: [release-evaluation, publish-images]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve lowercase image repository
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+      - name: Prepare release notes
+        run: |
+          {
+            echo "## mikuRAG ${{ github.ref_name }}"
+            echo
+            echo "Images (immutable, published to GHCR with SBOM and provenance attestations):"
+            echo "- \`ghcr.io/${{ steps.repo.outputs.name }}/backend:${{ github.ref_name }}\`"
+            echo "- \`ghcr.io/${{ steps.repo.outputs.name }}/frontend:${{ github.ref_name }}\`"
+            echo
+            echo "## Deployment"
+            echo "1. Back up the PostgreSQL volume."
+            echo "2. \`docker compose pull && docker compose run --rm --profile tools migrate\`"
+            echo "3. \`docker compose up -d\`"
+            echo
+            echo "## Rollback"
+            echo "- Images are immutable per tag: pin the previous tag in \`.env\`/Compose and \`docker compose up -d\`."
+            echo "- Migrations are forward-safe; the previous release schema is still supported by the CI migration checks, but do not downgrade in place. Restore the pre-migration backup if the new schema must be reverted."
+            echo
+            echo "## Evidence"
+            echo "- Quality/latency/cost evidence: the provider-backed evaluation that gated this release is attached as \`evaluation-results.tar.gz\`."
+            echo "- Checkpoint summaries remain in \`docs/EVALUATION-CHECKPOINT-*.md\` at this tag."
+            echo "- Migration review: \`backend/migrations/versions/\` at this tag."
+            echo
+            echo "## Artifacts"
+            echo "- Evaluation reports, SBOMs (SPDX JSON), and SHA-256 checksums are attached below."
+          } > release-notes.md
+          cat release-notes.md
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "mikuRAG ${{ github.ref_name }}" \
+            --notes-file release-notes.md \
+            backend-sbom.spdx.json frontend-sbom.spdx.json \
+            release-artifacts/evaluation-results.tar.gz \
+            release-artifacts/checksums-sha256.txt

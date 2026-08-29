@@ -9,8 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.ingestion.tokenization import Tokenizer, create_tokenizer
-from app.models import Chunk, ChunkLevel, Document, DocumentStatus
+from app.models import Chunk, ChunkLevel, Document, DocumentStatus, KnowledgeBase
 from app.observability import emit_observation
+from app.rag.cache import DerivedDataCache, cache_key, get_derived_cache
 from app.rag.citations import public_locator
 from app.rag.evidence_assembly import (
     apply_adaptive_diversity,
@@ -36,6 +37,7 @@ from app.rag.retrievers import (
     PgVectorRetriever,
     PostgresFTSLexicalRetriever,
     _candidate_from_row,
+    filters_sql,
     is_bm25_available,
 )
 
@@ -96,6 +98,8 @@ async def retrieve_evidence(
     mode: RetrievalMode | str | None = None,
     filters: RetrievalFilters | None = None,
     query_plan: QueryPlan | None = None,
+    cache: DerivedDataCache | None = None,
+    index_generation: int | None = None,
 ) -> tuple[list[Evidence], bool]:
     """Retrieve ranked Evidence for a Knowledge Base under the active retrieval mode.
 
@@ -117,6 +121,60 @@ async def retrieve_evidence(
     if query_plan is not None:
         active_metrics.rewrite_status = query_plan.status.value
 
+    active_cache = cache or get_derived_cache(settings)
+    retrieval_cache_key: str | None = None
+    if (
+        active_cache is not None
+        and settings.retrieval_cache_enabled
+        and not settings.hierarchical_retrieval_enabled
+    ):
+        generation = index_generation
+        if generation is None:
+            generation = await session.scalar(
+                select(KnowledgeBase.index_generation).where(
+                    KnowledgeBase.id == knowledge_base_id
+                )
+            )
+        if generation is not None:
+            retrieval_cache_key = cache_key(
+                "retrieval-result",
+                knowledge_base_id=knowledge_base_id,
+                index_generation=int(generation),
+                query_text=query_text,
+                filters=active_filters,
+                settings=settings,
+                mode=active_mode,
+            )
+            cached, cache_status = await active_cache.get_json(retrieval_cache_key)
+            active_metrics.retrieval_cache_status = cache_status
+            if cache_status == "hit":
+                cached_result = await _load_cached_candidates(
+                    session,
+                    knowledge_base_id,
+                    active_filters,
+                    cached,
+                )
+                if cached_result is not None:
+                    selected, sufficient = cached_result
+                    active_tokenizer = tokenizer or create_tokenizer(settings.chunk_tokenizer)
+                    active_metrics.fused_candidate_count = len(selected)
+                    active_metrics.reranked_candidate_count = len(selected)
+                    active_metrics.evidence_token_count = _evidence_token_count(
+                        selected, active_tokenizer
+                    )
+                    active_metrics.retrieval_duration_ms = (
+                        perf_counter() - retrieval_started
+                    ) * 1_000
+                    _emit_retrieval_observation(
+                        knowledge_base_id,
+                        active_mode.value,
+                        selected,
+                        sufficient,
+                        active_metrics,
+                    )
+                    return _to_evidence(selected), sufficient
+                active_metrics.retrieval_cache_status = "invalid"
+
     candidate_started = perf_counter()
     semantic, lexical, lexical_kind = await _generate_candidates(
         session,
@@ -137,6 +195,7 @@ async def retrieve_evidence(
 
     reranked_mode = active_mode == RetrievalMode.HYBRID_RRF_RERANKED
     hierarchical = settings.hierarchical_retrieval_enabled
+    fusion_started = perf_counter()
     fused = RrfFusionStrategy().fuse(
         semantic,
         lexical,
@@ -152,6 +211,7 @@ async def retrieve_evidence(
             None if reranked_mode or hierarchical else settings.retrieval_max_chunks_per_document
         ),
     )
+    active_metrics.fusion_ms = (perf_counter() - fusion_started) * 1_000
     active_metrics.fused_candidate_count = len(fused)
 
     if reranked_mode:
@@ -188,6 +248,13 @@ async def retrieve_evidence(
         )
         active_metrics.drop_counts = _legacy_drop_counts(semantic, lexical, selected)
         sufficient = is_sufficient(selected, settings)
+        await _write_retrieval_cache(
+            active_cache,
+            retrieval_cache_key,
+            selected,
+            sufficient,
+            active_metrics,
+        )
         active_metrics.retrieval_duration_ms = (
             perf_counter() - retrieval_started
         ) * 1_000
@@ -200,6 +267,7 @@ async def retrieve_evidence(
         )
         return _to_evidence(selected), sufficient
 
+    expansion_started = perf_counter()
     active_tokenizer = tokenizer or create_tokenizer(settings.chunk_tokenizer)
     if not reranked_mode:
         # The hierarchical pipeline always begins with a deterministic rerank
@@ -243,6 +311,7 @@ async def retrieve_evidence(
         selected, active_tokenizer
     )
     sufficient = is_sufficient(selected, settings)
+    active_metrics.expansion_ms = (perf_counter() - expansion_started) * 1_000
     active_metrics.retrieval_duration_ms = (
         perf_counter() - retrieval_started
     ) * 1_000
@@ -254,6 +323,91 @@ async def retrieve_evidence(
         active_metrics,
     )
     return _to_evidence(selected), sufficient
+
+
+async def _write_retrieval_cache(
+    cache: DerivedDataCache | None,
+    key: str | None,
+    selected: list[Candidate],
+    sufficient: bool,
+    metrics: RetrievalMetrics,
+) -> None:
+    if cache is None or key is None:
+        return
+    status = await cache.set_json(
+        key,
+        {
+            "sufficient": sufficient,
+            "candidates": [
+                {
+                    "chunk_id": str(candidate.chunk_id),
+                    "semantic_similarity": candidate.semantic_similarity,
+                    "lexical_score": candidate.lexical_score,
+                    "retrieval_score": candidate.effective_score,
+                }
+                for candidate in selected
+            ],
+        },
+    )
+    if status in {"error", "oversize"}:
+        metrics.retrieval_cache_status = status
+    elif metrics.retrieval_cache_status in {"disabled", "invalid"}:
+        metrics.retrieval_cache_status = "miss"
+
+
+async def _load_cached_candidates(
+    session: AsyncSession,
+    knowledge_base_id: uuid.UUID,
+    filters: RetrievalFilters,
+    payload: object,
+) -> tuple[list[Candidate], bool] | None:
+    if not isinstance(payload, dict) or not isinstance(payload.get("sufficient"), bool):
+        return None
+    raw_candidates = payload.get("candidates")
+    if not isinstance(raw_candidates, list) or len(raw_candidates) > 100:
+        return None
+    records: list[tuple[uuid.UUID, dict[str, object]]] = []
+    try:
+        for item in raw_candidates:
+            if not isinstance(item, dict):
+                return None
+            records.append((uuid.UUID(str(item["chunk_id"])), item))
+    except (KeyError, TypeError, ValueError):
+        return None
+    chunk_ids = [chunk_id for chunk_id, _ in records]
+    if len(set(chunk_ids)) != len(chunk_ids):
+        return None
+    result = await session.execute(
+        select(Chunk, Document)
+        .join(Document, Document.id == Chunk.document_id)
+        .where(
+            Document.knowledge_base_id == knowledge_base_id,
+            Document.status == DocumentStatus.READY,
+            Chunk.id.in_(chunk_ids),
+            *filters_sql(filters),
+        )
+    )
+    rows = {chunk.id: (chunk, document) for chunk, document in result.all()}
+    if set(rows) != set(chunk_ids):
+        return None
+    selected: list[Candidate] = []
+    try:
+        for chunk_id, item in records:
+            chunk, document = rows[chunk_id]
+            score = float(item["retrieval_score"])
+            semantic = item.get("semantic_similarity")
+            lexical = item.get("lexical_score")
+            selected.append(
+                replace(
+                    _candidate_from_row(chunk, document),
+                    semantic_similarity=(float(semantic) if semantic is not None else None),
+                    lexical_score=(float(lexical) if lexical is not None else None),
+                    fused_score=score,
+                )
+            )
+    except (KeyError, TypeError, ValueError):
+        return None
+    return selected, bool(payload["sufficient"])
 
 
 async def _generate_candidates(
@@ -555,6 +709,10 @@ def _emit_retrieval_observation(
         semantic_query_duration_ms=round(metrics.semantic_query_ms, 2),
         lexical_query_duration_ms=round(metrics.lexical_query_ms, 2),
         reranking_duration_ms=round(metrics.reranking_ms, 2),
+        fusion_duration_ms=round(metrics.fusion_ms, 2),
+        expansion_duration_ms=round(metrics.expansion_ms, 2),
+        query_embedding_cache_status=metrics.query_embedding_cache_status,
+        retrieval_cache_status=metrics.retrieval_cache_status,
         neighbor_expansion_count=metrics.neighbor_expansion_count,
         parent_promotion_count=metrics.parent_promotion_count,
         evidence_token_count=metrics.evidence_token_count,

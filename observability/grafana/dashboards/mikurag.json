@@ -1,0 +1,180 @@
+{
+  "title": "mikuRAG / Quality and Operations",
+  "uid": "mikurag-overview",
+  "schemaVersion": 39,
+  "editable": true,
+  "time": { "from": "now-3h", "to": "now" },
+  "refresh": "30s",
+  "tags": ["mikurag"],
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+        "query": "label_values(mikurag_rag_turns_total, service_name)",
+        "includeAll": true,
+        "multi": true,
+        "current": { "selected": true, "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "RAG stage latency (p50 / p95)",
+      "description": "Per-stage latency from the redacted turn measurement. The acceptance gate targets a 1500 ms retrieval p95.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "unit": "s",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, stage) (rate(mikurag_rag_stage_duration_seconds_bucket{service_name=~\"$service\"}[15m])))",
+          "legendFormat": "p50 {{stage}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, stage) (rate(mikurag_rag_stage_duration_seconds_bucket{service_name=~\"$service\"}[15m])))",
+          "legendFormat": "p95 {{stage}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Turn outcomes (rate by outcome)",
+      "description": "grounded_answer / insufficient_evidence / conflicting_evidence / failed. Sustained insufficient_evidence usually means retrieval or corpus problems, not generation.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(mikurag_rag_turns_total{service_name=~\"$service\"}[15m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "End-to-end turn latency (p50 / p95 / p99)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "unit": "s",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(mikurag_rag_turn_duration_seconds_bucket{service_name=~\"$service\"}[15m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(mikurag_rag_turn_duration_seconds_bucket{service_name=~\"$service\"}[15m])))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(mikurag_rag_turn_duration_seconds_bucket{service_name=~\"$service\"}[15m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "API request latency (p95)",
+      "description": "HTTP server spans from the OpenTelemetry FastAPI instrumentation (stable semantic convention, seconds).",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "unit": "s",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, http_route) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[15m])))",
+          "legendFormat": "p95 {{http_route}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Token usage per turn (mean by kind)",
+      "description": "prompt / completion / query_embedding / evidence tokens mirrored from the versioned cost accounting.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
+      "unit": "short",
+      "targets": [
+        {
+          "expr": "sum by (kind) (rate(mikurag_rag_tokens_sum{service_name=~\"$service\"}[15m])) / clamp_min(sum by (kind) (rate(mikurag_rag_tokens_count{service_name=~\"$service\"}[15m])), 0.001)",
+          "legendFormat": "{{kind}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Derived-cache operations (rate by result)",
+      "description": "query_embedding / retrieval cache hits, misses, and errors. Errors are fail-open and never block answers.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
+      "targets": [
+        {
+          "expr": "sum by (cache, result) (rate(mikurag_cache_operations_total{service_name=~\"$service\"}[15m]))",
+          "legendFormat": "{{cache}} {{result}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Ingestion outcomes (rate)",
+      "description": "Document ingestion completed / failed / skipped rates from the worker.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "targets": [
+        {
+          "expr": "sum by (outcome) (rate(mikurag_ingestion_documents_total{service_name=~\"$service\"}[15m]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Ingestion duration (p95)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
+      "unit": "s",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(mikurag_ingestion_duration_seconds_bucket{service_name=~\"$service\"}[15m])))",
+          "legendFormat": "p95 {{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Embedding inputs submitted",
+      "description": "Volume of embedding inputs during ingestion, for capacity and provider-cost tracking.",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+      "gridPos": { "h": 5, "w": 12, "x": 0, "y": 33 },
+      "targets": [
+        {
+          "expr": "sum(increase(mikurag_ingestion_embedding_inputs_total{service_name=~\"$service\"}[24h]))",
+          "legendFormat": "24h inputs"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Turn failure categories (rate)",
+      "description": "client_disconnected / provider_or_grounding_error / unexpected_error.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "mikurag-prometheus" },
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 33 },
+      "targets": [
+        {
+          "expr": "sum by (failure_category) (rate(mikurag_rag_turns_total{outcome=\"failed\", service_name=~\"$service\"}[15m]))",
+          "legendFormat": "{{failure_category}}"
+        }
+      ]
+    }
+  ]
+}

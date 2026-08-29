@@ -92,8 +92,11 @@ def test_aggregate_report_includes_by_split_ingestion_and_confidence_intervals()
         "ingestion_duration_ms": 250.0,
         "total_chunk_count": 12,
         "embedding_input_count": 8,
+        "embedding_token_count": 0,
         "storage_estimate_bytes": 2048,
         "chunking_config_hash": CHUNKING_CONFIG_HASH,
+        "documents_per_second": 0.0,
+        "bytes_per_second": 0.0,
     }
     intervals = report["confidence_intervals"]
     assert isinstance(intervals, dict)

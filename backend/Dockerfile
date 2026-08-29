@@ -18,7 +18,7 @@ ARG PYTORCH_VERSION=2.12.1
 RUN pip install --no-cache-dir \
         --index-url https://download.pytorch.org/whl/cpu \
         "torch==${PYTORCH_VERSION}" \
-    && pip install --no-cache-dir ".[rerank]"
+    && pip install --no-cache-dir ".[otel,rerank]"
 
 RUN useradd --create-home --uid 10001 mikurag \
     && mkdir -p /data/uploads /data/models \

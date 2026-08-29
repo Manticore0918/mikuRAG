@@ -1,5 +1,8 @@
 # mikuRAG
 
+[![CI](https://github.com/Manticore0918/mikuRAG/actions/workflows/ci.yml/badge.svg)](https://github.com/Manticore0918/mikuRAG/actions/workflows/ci.yml)
+[![Release](https://github.com/Manticore0918/mikuRAG/actions/workflows/release.yml/badge.svg)](https://github.com/Manticore0918/mikuRAG/actions/workflows/release.yml)
+
 mikuRAG is a self-hosted, multi-user private knowledge system for grounded answers with citations.
 
 The stable default path uses legacy character chunking, pgvector semantic search,
@@ -95,6 +98,13 @@ The local model returns structured claims linked to Evidence identifiers. mikuRA
 
 Conversation endpoints use Server-Sent Events for progress and validated answer delivery. The reverse proxy disables buffering and allows up to ten minutes for slower local generation.
 
+Every completed turn also stores a redacted measurement record with stage
+latencies, token and candidate counts, cache outcomes, model versions, and an
+estimate from the versioned pricing ledger. Optional Redis query-embedding and
+retrieval-ID caches are feature-off by default; PostgreSQL index generations make
+old entries unreachable after Ready, deletion, or re-index transitions. Redis
+failure falls back to uncached retrieval, and final answers are not cached.
+
 ## Phase 2 security behavior
 
 - Passwords use Argon2id hashing.
@@ -106,11 +116,20 @@ Conversation endpoints use Server-Sent Events for progress and validated answer 
 
 ## Development checks
 
+Every pull request runs the same checks in CI (`.github/workflows/ci.yml`):
+backend Ruff + pytest, frontend ESLint + Vitest + production build, Alembic
+upgrade checks from a clean database and from the previous release schema,
+real-PostgreSQL/Redis integration tests, backend/frontend image builds, and a
+Compose smoke test with stubbed model providers plus an evaluation-subset
+report-schema check. Tagged releases publish immutable GHCR images with SBOMs
+and rollback guidance.
+
 Backend checks run from `backend` after installing the `dev` extra:
 
 ```powershell
 python -m pytest
 python -m ruff check --no-cache .
+python -m pytest -m integration   # needs live PostgreSQL/Redis (CI runs these)
 ```
 
 Frontend checks run from `frontend`:
@@ -120,6 +139,39 @@ npm test
 npm run lint
 npm run build
 ```
+
+The end-to-end Compose smoke (isolated `mikurag-smoke` project, deterministic
+provider stubs) runs locally with:
+
+```powershell
+python scripts/compose_smoke.py
+```
+
+## Observability (optional, feature-off by default)
+
+Correlation IDs are always on: every API response carries `X-Request-ID`,
+every log record and observation event carries it, and it propagates to Celery
+tasks so one question can be followed across API, worker, database, cache, and
+model calls.
+
+OpenTelemetry traces and metrics are opt-in. With the observability override
+and profile enabled, Grafana (`localhost:3000`) renders the provisioned
+quality/operations dashboard, Prometheus holds the metrics and initial SLO
+alerts, and Tempo stores the traces:
+
+```yaml
+# .env
+MIKURAG_OTEL_ENABLED=true
+```
+
+```powershell
+docker compose -f compose.yaml -f compose.observability.yaml `
+  --profile observability up -d
+```
+
+Telemetry carries identifiers, counts, durations, and statuses only — never
+query, answer, or Document text. See [`docs/OBSERVABILITY.md`](./docs/OBSERVABILITY.md)
+for the metric catalogue, SLOs, failure drills, and the privacy boundary.
 
 ## Executable evaluation
 
@@ -147,6 +199,9 @@ Base and managed source files. The evaluation CLI exposes three subcommands:
 
 See [`docs/EVALUATION-RUNNER.md`](./docs/EVALUATION-RUNNER.md) for the lifecycle,
 retrieval modes, corpus schema, failure behavior, and artifact contract.
+Checkpoint 4's schema-v3 faithfulness metrics, accounting contract, cache keys,
+and remaining exit-gate work are documented in
+[`docs/EVALUATION-CHECKPOINT-4.md`](./docs/EVALUATION-CHECKPOINT-4.md).
 
 ## Reproducible baseline demo
 
@@ -195,4 +250,5 @@ expected evidence.
 - Hierarchical chunking rollout operations: [`docs/CHUNKING-ROLLOUT.md`](./docs/CHUNKING-ROLLOUT.md)
 - Default-rollout acceptance gates: [`docs/CHUNKING-ACCEPTANCE.md`](./docs/CHUNKING-ACCEPTANCE.md)
 - Hierarchical chunking risk controls: [`docs/CHUNKING-RISKS.md`](./docs/CHUNKING-RISKS.md)
+- Observability, CI/CD, correlation IDs, and telemetry privacy: [`docs/OBSERVABILITY.md`](./docs/OBSERVABILITY.md)
 - Architectural decisions: [`docs/adr`](./docs/adr)

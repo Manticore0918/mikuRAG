@@ -1,0 +1,45 @@
+name: Capacity benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Benchmark load profile"
+        required: true
+        type: choice
+        options: [smoke, standard, capacity]
+        default: capacity
+  schedule:
+    - cron: "0 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  capacity:
+    name: Synthetic ingestion and retrieval capacity
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install benchmark runtime
+        run: python -m pip install -e .
+      - name: Run capacity matrix
+        env:
+          PROFILE: ${{ inputs.profile || 'capacity' }}
+        run: |
+          python -m app.benchmark_cli \
+            --profile "$PROFILE" \
+            --output capacity-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capacity-report-${{ github.run_id }}
+          path: backend/capacity-report.json
+          retention-days: 90

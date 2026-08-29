@@ -28,10 +28,20 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "mikurag-backend[otel]",
   "pytest>=8.4,<9",
   "pytest-asyncio>=1.0,<2",
   "reportlab>=4.4,<5",
   "ruff>=0.12,<1",
+]
+otel = [
+  "opentelemetry-exporter-otlp-proto-http>=1.30,<2",
+  "opentelemetry-instrumentation-celery>=0.50b0,<1",
+  "opentelemetry-instrumentation-fastapi>=0.50b0,<1",
+  "opentelemetry-instrumentation-httpx>=0.50b0,<1",
+  "opentelemetry-instrumentation-redis>=0.50b0,<1",
+  "opentelemetry-instrumentation-sqlalchemy>=0.50b0,<1",
+  "opentelemetry-sdk>=1.30,<2",
 ]
 rerank = [
   "sentence-transformers==4.1.0",
@@ -41,13 +51,19 @@ rerank = [
 packages = ["app"]
 
 [tool.pytest.ini_options]
-addopts = "-p no:cacheprovider"
+addopts = "-p no:cacheprovider -m 'not integration'"
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+  "integration: requires live PostgreSQL/pg_search and Redis (deselect by default; run with -m integration)",
+]
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+# Test-run debris from `pytest --basetemp` invocations; gitignored but present
+# on development trees, and intentionally malformed fixtures break parsing.
+extend-exclude = [".pytest-tmp", ".pytest-tmp-*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]

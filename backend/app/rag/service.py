@@ -4,16 +4,19 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from time import perf_counter
 
 from sqlalchemy import select
 
+from app import telemetry
 from app.config import get_settings
 from app.database import session_factory
 from app.ingestion.embeddings import embed_texts
 from app.ingestion.errors import EmbeddingProviderError
 from app.ingestion.tokenization import create_tokenizer
-from app.models import Citation, Conversation, Message, MessageStatus
+from app.models import Citation, Conversation, KnowledgeBase, Message, MessageStatus
 from app.observability import emit_observation
+from app.rag.cache import get_derived_cache, query_embedding
 from app.rag.citations import public_locator
 from app.rag.generation import GenerationProviderError, complete_json, stream_json
 from app.rag.grounding import (
@@ -33,6 +36,7 @@ from app.rag.query_plan import build_query_plan
 from app.rag.retrieval import Evidence, retrieve_evidence
 from app.rag.retrieval_types import QueryPlan, RetrievalFilters, RetrievalMetrics
 from app.rag.summary_retrieval import SummaryContext, retrieve_summary_context
+from app.rag.turn_measurement import build_turn_measurement
 
 logger = logging.getLogger(__name__)
 
@@ -122,25 +126,26 @@ async def _persist_complete(
         )
         for item in evidence
     ]
-    async with session_factory() as session:
-        message = await session.get(Message, assistant_message_id, with_for_update=True)
-        conversation = await session.get(Conversation, conversation_id)
-        if message is None or conversation is None:
-            raise RuntimeError("Turn records disappeared while saving the answer")
-        message.content = content
-        message.status = MessageStatus.COMPLETE
-        message.model_metadata = {
-            "outcome": outcome,
-            "embedding_model": settings.embedding_model_id,
-            "generation_model": settings.generation_model_id,
-            "evidence_count": len(evidence),
-            "query_kind": query_kind,
-            "summary_context_count": summary_context_count,
-            "usage": usage or {},
-        }
-        conversation.updated_at = datetime.now(UTC)
-        session.add_all(citations)
-        await session.commit()
+    with telemetry.stage_span("rag.persist"):
+        async with session_factory() as session:
+            message = await session.get(Message, assistant_message_id, with_for_update=True)
+            conversation = await session.get(Conversation, conversation_id)
+            if message is None or conversation is None:
+                raise RuntimeError("Turn records disappeared while saving the answer")
+            message.content = content
+            message.status = MessageStatus.COMPLETE
+            message.model_metadata = {
+                "outcome": outcome,
+                "embedding_model": settings.embedding_model_id,
+                "generation_model": settings.generation_model_id,
+                "evidence_count": len(evidence),
+                "query_kind": query_kind,
+                "summary_context_count": summary_context_count,
+                "usage": usage or {},
+            }
+            conversation.updated_at = datetime.now(UTC)
+            session.add_all(citations)
+            await session.commit()
     return citations
 
 
@@ -155,19 +160,40 @@ async def _mark_failed(assistant_message_id: uuid.UUID, safe_reason: str) -> Non
         await session.commit()
 
 
+async def _persist_turn_measurement(
+    assistant_message_id: uuid.UUID,
+    measurement: dict[str, object],
+) -> None:
+    """Persist accounting without allowing it to break an already saved answer."""
+
+    try:
+        async with session_factory() as session:
+            message = await session.get(Message, assistant_message_id, with_for_update=True)
+            if message is None:
+                return
+            message.model_metadata = {
+                **dict(message.model_metadata or {}),
+                "measurement": measurement,
+            }
+            await session.commit()
+    except Exception:
+        logger.warning("Could not persist the redacted turn measurement", exc_info=True)
+
+
 async def _resolve_query(
     question: str,
     history: list[HistoryMessage],
     *,
     metrics: RetrievalMetrics | None = None,
 ) -> tuple[QueryPlan, dict[str, int]]:
-    return await build_query_plan(
-        question,
-        history,
-        get_settings(),
-        complete=complete_json,
-        metrics=metrics,
-    )
+    with telemetry.stage_span("rag.rewrite"):
+        return await build_query_plan(
+            question,
+            history,
+            get_settings(),
+            complete=complete_json,
+            metrics=metrics,
+        )
 
 
 def _merge_usage(*items: dict[str, int]) -> dict[str, int]:
@@ -183,16 +209,25 @@ async def _generate_grounded_answer(
     history: list[HistoryMessage],
     evidence: list[Evidence],
     summary_context: list[SummaryContext] | None = None,
+    stage_timings: dict[str, float] | None = None,
 ) -> tuple[RenderedAnswer, dict[str, int]]:
+    generation_started = perf_counter()
     generation = await stream_json(
         grounded_messages(question, history, evidence, summary_context)
     )
+    _add_timing(stage_timings, "generation", generation_started)
+    validation_started = perf_counter()
     try:
-        return validate_and_render(generation.payload, evidence), generation.usage
+        rendered = validate_and_render(generation.payload, evidence)
     except GroundingValidationError as error:
+        _add_timing(stage_timings, "validation", validation_started)
         logger.warning("Retrying a generated answer rejected by grounding validation: %s", error)
         rejection_reason = str(error)
+    else:
+        _add_timing(stage_timings, "validation", validation_started)
+        return rendered, generation.usage
 
+    generation_started = perf_counter()
     try:
         repair = await complete_json(
             grounded_repair_messages(
@@ -202,8 +237,20 @@ async def _generate_grounded_answer(
                 summary_context,
             )
         )
+        _add_timing(stage_timings, "generation", generation_started)
+        validation_started = perf_counter()
         rendered = validate_and_render(repair.payload, evidence)
     except (GenerationProviderError, GroundingValidationError) as repair_error:
+        elapsed_stage = (
+            "generation"
+            if isinstance(repair_error, GenerationProviderError)
+            else "validation"
+        )
+        _add_timing(
+            stage_timings,
+            elapsed_stage,
+            generation_started if elapsed_stage == "generation" else validation_started,
+        )
         logger.warning("Rejected unverifiable generated answer after retry: %s", repair_error)
         return (
             RenderedAnswer(
@@ -213,7 +260,17 @@ async def _generate_grounded_answer(
             ),
             generation.usage,
         )
+    _add_timing(stage_timings, "validation", validation_started)
     return rendered, _merge_usage(generation.usage, repair.usage)
+
+
+def _add_timing(
+    timings: dict[str, float] | None,
+    name: str,
+    started: float,
+) -> None:
+    if timings is not None:
+        timings[name] = timings.get(name, 0.0) + (perf_counter() - started) * 1_000
 
 
 async def generate_grounded_answer(
@@ -221,6 +278,7 @@ async def generate_grounded_answer(
     history: list[HistoryMessage],
     evidence: list[Evidence],
     summary_context: list[SummaryContext] | None = None,
+    stage_timings: dict[str, float] | None = None,
 ) -> tuple[RenderedAnswer, dict[str, int]]:
     """Run the production grounded generation and validation path."""
 
@@ -229,6 +287,7 @@ async def generate_grounded_answer(
         history,
         evidence,
         summary_context,
+        stage_timings,
     )
 
 
@@ -239,6 +298,7 @@ async def turn_events(
     *,
     filters: RetrievalFilters | None = None,
 ) -> AsyncIterator[str]:
+    turn_started = perf_counter()
     turn_stage = "loading"
     try:
         yield sse_event("status", {"stage": "retrieving"})
@@ -255,33 +315,72 @@ async def turn_events(
         query = plan.effective_query
         classification = query_classifier.classify(query)
         settings = get_settings()
-        query_vector = (await embed_texts([query]))[0]
+        effective_filters = (
+            filters
+            if filters is not None and not filters.is_empty()
+            else plan.inferred_filters
+        )
+        cache = get_derived_cache(settings)
+        embedding_started = perf_counter()
         summary_context: list[SummaryContext] = []
         async with session_factory() as session:
-            evidence, sufficient = await retrieve_evidence(
-                session,
-                conversation.knowledge_base_id,
-                query,
-                query_vector,
-                settings,
-                filters=filters,
-                query_plan=plan,
-                metrics=retrieval_metrics,
+            index_generation = await session.scalar(
+                select(KnowledgeBase.index_generation).where(
+                    KnowledgeBase.id == conversation.knowledge_base_id
+                )
             )
-            if (
-                classification.kind == QueryKind.BROAD
-                and settings.hierarchical_retrieval_enabled
+
+            async def compute_embedding() -> list[float]:
+                return (await embed_texts([query]))[0]
+
+            with telemetry.stage_span("rag.embed"):
+                query_vector, embedding_cache_status = await query_embedding(
+                    cache,
+                    knowledge_base_id=conversation.knowledge_base_id,
+                    index_generation=int(index_generation or 0),
+                    query_text=query,
+                    filters=effective_filters,
+                    settings=settings,
+                    mode=settings.retrieval_mode,
+                    compute=compute_embedding,
+                )
+            retrieval_metrics.query_embedding_ms = (
+                perf_counter() - embedding_started
+            ) * 1_000
+            retrieval_metrics.query_embedding_cache_status = embedding_cache_status
+            with telemetry.stage_span(
+                "rag.retrieve",
+                knowledge_base_id=str(conversation.knowledge_base_id),
+                retrieval_mode=settings.retrieval_mode.value,
             ):
-                summary_context = await retrieve_summary_context(
+                evidence, sufficient = await retrieve_evidence(
                     session,
                     conversation.knowledge_base_id,
                     query,
                     query_vector,
                     settings,
-                    create_tokenizer(settings.chunk_tokenizer),
+                    filters=filters,
+                    query_plan=plan,
+                    metrics=retrieval_metrics,
+                    cache=cache,
+                    index_generation=int(index_generation or 0),
                 )
+            if (
+                classification.kind == QueryKind.BROAD
+                and settings.hierarchical_retrieval_enabled
+            ):
+                with telemetry.stage_span("rag.summary"):
+                    summary_context = await retrieve_summary_context(
+                        session,
+                        conversation.knowledge_base_id,
+                        query,
+                        query_vector,
+                        settings,
+                        create_tokenizer(settings.chunk_tokenizer),
+                    )
 
         if not sufficient:
+            persistence_started = perf_counter()
             citations = await _persist_complete(
                 assistant_message_id,
                 conversation_id,
@@ -292,6 +391,20 @@ async def turn_events(
                 query_kind=classification.kind,
                 summary_context_count=len(summary_context),
             )
+            persistence_ms = (perf_counter() - persistence_started) * 1_000
+            measurement = build_turn_measurement(
+                settings=settings,
+                retrieval=retrieval_metrics,
+                usage=rewrite_usage,
+                embedding_tokens=create_tokenizer(settings.chunk_tokenizer).count(query),
+                generation_ms=0.0,
+                validation_ms=0.0,
+                persistence_ms=persistence_ms,
+                total_ms=(perf_counter() - turn_started) * 1_000,
+            )
+            await _persist_turn_measurement(assistant_message_id, measurement)
+            emit_observation(logger, "rag_turn_measurement", **measurement)
+            telemetry.record_turn_measurement(measurement, "insufficient_evidence")
             yield sse_event(
                 "start", {"message_id": str(assistant_message_id), "status": "complete"}
             )
@@ -302,25 +415,44 @@ async def turn_events(
 
         yield sse_event("status", {"stage": "generating"})
         turn_stage = "generating"
-        rendered, generation_usage = await _generate_grounded_answer(
-            user_message.content,
-            history,
-            evidence,
-            summary_context,
-        )
+        stage_timings: dict[str, float] = {}
+        with telemetry.stage_span("rag.generate"):
+            rendered, generation_usage = await _generate_grounded_answer(
+                user_message.content,
+                history,
+                evidence,
+                summary_context,
+                stage_timings,
+            )
         yield sse_event("status", {"stage": "validating"})
         turn_stage = "validating"
 
+        persistence_started = perf_counter()
+        combined_usage = _merge_usage(rewrite_usage, generation_usage)
         citations = await _persist_complete(
             assistant_message_id,
             conversation_id,
             rendered.content,
             rendered.used_evidence,
             outcome=rendered.outcome,
-            usage=_merge_usage(rewrite_usage, generation_usage),
+            usage=combined_usage,
             query_kind=classification.kind,
             summary_context_count=len(summary_context),
         )
+        persistence_ms = (perf_counter() - persistence_started) * 1_000
+        measurement = build_turn_measurement(
+            settings=settings,
+            retrieval=retrieval_metrics,
+            usage=combined_usage,
+            embedding_tokens=create_tokenizer(settings.chunk_tokenizer).count(query),
+            generation_ms=stage_timings.get("generation", 0.0),
+            validation_ms=stage_timings.get("validation", 0.0),
+            persistence_ms=persistence_ms,
+            total_ms=(perf_counter() - turn_started) * 1_000,
+        )
+        await _persist_turn_measurement(assistant_message_id, measurement)
+        emit_observation(logger, "rag_turn_measurement", **measurement)
+        telemetry.record_turn_measurement(measurement, rendered.outcome)
         yield sse_event(
             "start", {"message_id": str(assistant_message_id), "status": "complete"}
         )
@@ -339,6 +471,7 @@ async def turn_events(
             terminal_stage=turn_stage,
             failure_category="client_disconnected",
         )
+        telemetry.record_turn("failed", failure_category="client_disconnected")
         await asyncio.shield(_mark_failed(assistant_message_id, "client_disconnected"))
         raise
     except (EmbeddingProviderError, GenerationProviderError, GroundingValidationError) as error:
@@ -349,6 +482,7 @@ async def turn_events(
             terminal_stage=turn_stage,
             failure_category="provider_or_grounding_error",
         )
+        telemetry.record_turn("failed", failure_category="provider_or_grounding_error")
         logger.warning("RAG turn failed for conversation %s: %s", conversation_id, error)
         await _mark_failed(assistant_message_id, "provider_or_grounding_error")
         yield sse_event("error", {"message": FAILED_ANSWER})
@@ -360,6 +494,7 @@ async def turn_events(
             terminal_stage=turn_stage,
             failure_category="unexpected_error",
         )
+        telemetry.record_turn("failed", failure_category="unexpected_error")
         logger.exception("Unexpected RAG turn failure for conversation %s", conversation_id)
         await _mark_failed(assistant_message_id, "unexpected_error")
         yield sse_event("error", {"message": FAILED_ANSWER})

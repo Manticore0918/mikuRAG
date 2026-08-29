@@ -1,0 +1,58 @@
+# OpenTelemetry Collector for the mikuRAG `observability` Compose profile.
+#
+# The backend and worker export OTLP over HTTP to this collector. Traces are
+# forwarded to Tempo, metrics are exposed in Prometheus format on :8889 for
+# the Prometheus scraper. The debug exporter stays off in the pipeline; add
+# it to a pipeline temporarily when triaging payloads.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 2s
+    limit_mib: 512
+    spike_limit_mib: 128
+  batch:
+    send_batch_size: 512
+    timeout: 5s
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Service identity (backend vs worker) lives on the resource; expose it
+    # as the `service_name` label so dashboards can split by component.
+    resource_to_telemetry_conversion:
+      enabled: true
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+service:
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      # Self-telemetry (otelcol_* metrics) on a stable, explicit address so the
+      # Prometheus `mikurag-otel-collector-self` scrape job can always reach it.
+      level: normal
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "0.0.0.0"
+                port: 8888
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]

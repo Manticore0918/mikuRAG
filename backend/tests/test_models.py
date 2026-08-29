@@ -25,6 +25,17 @@ def test_users_have_server_checked_session_versions() -> None:
     assert "session_version" in Base.metadata.tables["users"].columns
 
 
+def test_knowledge_bases_have_authoritative_cache_generations() -> None:
+    table = Base.metadata.tables["knowledge_bases"]
+    checks = {
+        constraint.name
+        for constraint in table.constraints
+        if isinstance(constraint, CheckConstraint)
+    }
+    assert "index_generation" in table.columns
+    assert "knowledge_bases_index_generation_ck" in checks
+
+
 def test_documents_have_status_scoped_knowledge_base_index() -> None:
     indexes = {index.name for index in Base.metadata.tables["documents"].indexes}
     assert "documents_kb_status_idx" in indexes

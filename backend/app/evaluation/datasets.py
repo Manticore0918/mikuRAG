@@ -44,6 +44,13 @@ class EvaluationHistoryMessage:
 
 
 @dataclass(frozen=True)
+class EvaluationExpectedClaim:
+    claim_id: str
+    acceptable_answer_facts: tuple[str, ...]
+    required_evidence: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ExecutableEvaluationCase:
     case_id: str
     category: str
@@ -57,6 +64,11 @@ class ExecutableEvaluationCase:
     history: tuple[EvaluationHistoryMessage, ...] = ()
     split: str = "train"
     relevance_grades: dict[str, int] = field(default_factory=dict)
+    expected_claims: tuple[EvaluationExpectedClaim, ...] = ()
+    acceptable_answer_facts: tuple[tuple[str, ...], ...] = ()
+    required_evidence: tuple[str, ...] = ()
+    refusal_expected: bool = False
+    conflicting_evidence: bool = False
 
 
 @dataclass(frozen=True)
@@ -78,8 +90,8 @@ def load_executable_dataset(path: Path) -> ExecutableEvaluationDataset:
     manifest_path = path.resolve()
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     schema_version = payload.get("schema_version")
-    if schema_version not in {1, 2}:
-        raise ValueError("Executable evaluation manifests require schema_version 1 or 2")
+    if schema_version not in {1, 2, 3}:
+        raise ValueError("Executable evaluation manifests require schema_version 1, 2, or 3")
     version = _required_string(payload, "version", "evaluation corpus")
     description = str(payload.get("description") or "").strip()
     root = manifest_path.parent
@@ -101,8 +113,8 @@ def load_executable_dataset(path: Path) -> ExecutableEvaluationDataset:
     headline_eligible = payload.get("headline_eligible", False)
     if not isinstance(headline_eligible, bool):
         raise ValueError("headline_eligible must be a Boolean")
-    if schema_version == 2 and review_status != "reviewed":
-        raise ValueError("Schema version 2 gold sets must declare review_status reviewed")
+    if schema_version >= 2 and review_status != "reviewed":
+        raise ValueError("Schema version 2+ gold sets must declare review_status reviewed")
 
     raw_documents = payload.get("documents")
     if not isinstance(raw_documents, list) or not raw_documents:
@@ -220,13 +232,13 @@ def _load_case(raw: object, *, schema_version: int) -> ExecutableEvaluationCase:
         raise ValueError(f"Supported case '{case_id}' requires relevant passages")
     filters = _load_filters(raw.get("filters", {}), case_id)
     history = _load_history(raw.get("history", []), case_id)
-    if schema_version == 2 and not isinstance(raw.get("reviewed"), bool):
+    if schema_version >= 2 and not isinstance(raw.get("reviewed"), bool):
         raise ValueError(f"Gold case '{case_id}' requires reviewed")
-    if schema_version == 2 and raw.get("reviewed") is not True:
+    if schema_version >= 2 and raw.get("reviewed") is not True:
         raise ValueError(f"Gold case '{case_id}' must be reviewed")
     split = "train"
     relevance_grades: dict[str, int] = {}
-    if schema_version == 2:
+    if schema_version >= 2:
         split = raw.get("split")
         if split not in {"train", "dev", "test"}:
             raise ValueError(f"Gold case '{case_id}' requires a train/dev/test split")
@@ -258,6 +270,44 @@ def _load_case(raw: object, *, schema_version: int) -> ExecutableEvaluationCase:
                 raise ValueError(
                     f"Case '{case_id}' relevant passage '{passage_id}' must be graded 1"
                 )
+    expected_claims: tuple[EvaluationExpectedClaim, ...] = ()
+    acceptable_facts: tuple[tuple[str, ...], ...] = tuple(
+        (term,) for term in answer_terms
+    )
+    required_evidence = required
+    refusal_expected = not expects_supported
+    conflicting_evidence = bool(required and not expects_supported)
+    if schema_version >= 3:
+        expected_claims = _load_expected_claims(raw.get("expected_claims"), case_id)
+        acceptable_facts = _load_acceptable_facts(
+            raw.get("acceptable_answer_facts"), case_id
+        )
+        required_evidence = _string_tuple(
+            raw.get("required_evidence"), f"Case '{case_id}' required_evidence"
+        )
+        refusal_expected = raw.get("refusal_expected")
+        conflicting_evidence = raw.get("conflicting_evidence")
+        if not isinstance(refusal_expected, bool) or not isinstance(
+            conflicting_evidence, bool
+        ):
+            raise ValueError(
+                f"Case '{case_id}' requires Boolean refusal/conflicting flags"
+            )
+        if required_evidence != required:
+            raise ValueError(
+                f"Case '{case_id}' required_evidence must match required_passage_ids"
+            )
+        if refusal_expected == expects_supported:
+            raise ValueError(
+                f"Case '{case_id}' refusal_expected conflicts with answer expectation"
+            )
+        if conflicting_evidence != bool(required and not expects_supported):
+            raise ValueError(f"Case '{case_id}' has inconsistent conflicting_evidence")
+        for claim in expected_claims:
+            if not set(claim.required_evidence) <= set(required_evidence):
+                raise ValueError(
+                    f"Case '{case_id}' claim '{claim.claim_id}' requires unknown evidence"
+                )
     return ExecutableEvaluationCase(
         case_id=case_id,
         category=category,
@@ -271,6 +321,50 @@ def _load_case(raw: object, *, schema_version: int) -> ExecutableEvaluationCase:
         history=history,
         split=split,
         relevance_grades=relevance_grades,
+        expected_claims=expected_claims,
+        acceptable_answer_facts=acceptable_facts,
+        required_evidence=required_evidence,
+        refusal_expected=refusal_expected,
+        conflicting_evidence=conflicting_evidence,
+    )
+
+
+def _load_expected_claims(
+    value: object,
+    case_id: str,
+) -> tuple[EvaluationExpectedClaim, ...]:
+    if not isinstance(value, list):
+        raise ValueError(f"Case '{case_id}' expected_claims must be a list")
+    claims: list[EvaluationExpectedClaim] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError(f"Case '{case_id}' expected claims must be objects")
+        claim_id = _stable_id(item, "claim_id", f"case '{case_id}' claim")
+        claims.append(
+            EvaluationExpectedClaim(
+                claim_id=claim_id,
+                acceptable_answer_facts=_string_tuple(
+                    item.get("acceptable_answer_facts"),
+                    f"Case '{case_id}' claim facts",
+                ),
+                required_evidence=_string_tuple(
+                    item.get("required_evidence"),
+                    f"Case '{case_id}' claim evidence",
+                ),
+            )
+        )
+    _require_unique((claim.claim_id for claim in claims), f"case '{case_id}' claim IDs")
+    return tuple(claims)
+
+
+def _load_acceptable_facts(
+    value: object,
+    case_id: str,
+) -> tuple[tuple[str, ...], ...]:
+    if not isinstance(value, list):
+        raise ValueError(f"Case '{case_id}' acceptable_answer_facts must be a list")
+    return tuple(
+        _string_tuple(item, f"Case '{case_id}' acceptable fact") for item in value
     )
 
 

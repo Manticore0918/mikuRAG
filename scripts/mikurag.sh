@@ -43,8 +43,11 @@ case "$COMMAND" in
   restart-smoke)
     .venv/bin/python scripts/restart_smoke.py
     ;;
+  compose-smoke)
+    .venv/bin/python scripts/compose_smoke.py
+    ;;
   *)
-    echo "Usage: $0 {setup|checks|migrations|seed|smoke|restart-smoke|evaluate}" >&2
+    echo "Usage: $0 {setup|checks|migrations|seed|smoke|restart-smoke|compose-smoke|evaluate}" >&2
     exit 2
     ;;
 esac
