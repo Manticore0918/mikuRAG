@@ -18,6 +18,7 @@ __pycache__/
 .pytest_cache/
 .pytest-tmp/
 .pytest-tmp-*/
+.pytest_tmp/
 .ruff_cache/
 .mypy_cache/
 .pyright/
@@ -46,7 +47,9 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Runtime data and local databases
-uploads/
+# Anchored so the rules cannot match backend/app/uploads (the application package).
+/uploads/
+/backend/uploads/
 postgres-data/
 redis-data/
 *.db

@@ -63,7 +63,7 @@ target-version = "py312"
 line-length = 100
 # Test-run debris from `pytest --basetemp` invocations; gitignored but present
 # on development trees, and intentionally malformed fixtures break parsing.
-extend-exclude = [".pytest-tmp", ".pytest-tmp-*"]
+extend-exclude = [".pytest_tmp", ".pytest-tmp", ".pytest-tmp-*"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
