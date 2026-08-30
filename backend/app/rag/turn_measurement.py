@@ -29,13 +29,16 @@ def build_turn_measurement(
     total_generation_tokens = int(
         usage.get("total_tokens") or prompt_tokens + completion_tokens
     )
+    billable_embedding_tokens = (
+        0 if retrieval.query_embedding_cache_status == "hit" else embedding_tokens
+    )
     cost = _estimate_cost(
         pricing,
         settings=settings,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_generation_tokens=total_generation_tokens,
-        embedding_tokens=embedding_tokens,
+        embedding_tokens=billable_embedding_tokens,
     )
     return {
         "schema_version": MEASUREMENT_SCHEMA_VERSION,
@@ -59,6 +62,7 @@ def build_turn_measurement(
             "completion": completion_tokens,
             "generation_total": total_generation_tokens,
             "query_embedding": embedding_tokens,
+            "query_embedding_billable": billable_embedding_tokens,
             "evidence": retrieval.evidence_token_count,
         },
         "candidate_counts": {
@@ -103,6 +107,17 @@ def _estimate_cost(
         if urlparse(settings.generation_base_url).hostname in _LOCAL_HOSTS
         else "external"
     )
+    embedding_provider = (
+        "local"
+        if urlparse(settings.embedding_endpoint).hostname in _LOCAL_HOSTS
+        else "external"
+    )
+    embedding_entry = _pricing_entry(
+        pricing,
+        kind="embedding",
+        provider=embedding_provider,
+        model=settings.embedding_model_id,
+    )
     generation_entry = _pricing_entry(
         pricing,
         kind="generation",
@@ -110,7 +125,15 @@ def _estimate_cost(
         model=settings.generation_model_id,
     )
     known_spend = 0.0
-    unpriced_tokens = embedding_tokens
+    unpriced_tokens = 0
+    embedding_spend: float | None = None
+    if embedding_entry is None:
+        unpriced_tokens += embedding_tokens
+    else:
+        embedding_spend = embedding_tokens * float(
+            embedding_entry["input_usd_per_million_tokens"]
+        ) / 1_000_000
+        known_spend += embedding_spend
     unclassified_generation_tokens = max(
         0,
         total_generation_tokens - prompt_tokens - completion_tokens,
@@ -130,6 +153,10 @@ def _estimate_cost(
         "estimated_api_spend": round(known_spend, 8),
         "estimate_complete": unpriced_tokens == 0,
         "unpriced_token_count": unpriced_tokens,
+        "billable_embedding_tokens": embedding_tokens,
+        "embedding_api_spend": (
+            round(embedding_spend, 8) if embedding_spend is not None else None
+        ),
         "local_generation_api_spend": (
             0.0 if generation_provider == "local" else None
         ),

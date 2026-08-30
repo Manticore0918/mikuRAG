@@ -51,8 +51,8 @@ any fixture without incrementing the dataset version and updating the manifest.
    manifest order. Expand every Citation before moving to the next case.
 
 The separate `migrations` workflow creates disposable PostgreSQL databases and
-verifies a clean upgrade, an upgrade from the previous `0005` schema, a rollback
-from `0008` to `0005`, and a re-upgrade to `head`. It never runs downgrade
+verifies a clean upgrade, an upgrade from the previous `0007` schema, a rollback
+from `head` to `0007`, and a re-upgrade to `head`. It never runs downgrade
 against the configured application database.
 
 ## Expected interaction

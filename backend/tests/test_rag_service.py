@@ -3,11 +3,12 @@ import uuid
 
 import pytest
 
+from app.config import Settings
 from app.rag import service
 from app.rag.generation import GenerationProviderError, GenerationResult
 from app.rag.grounding import HistoryMessage
 from app.rag.retrieval import Evidence
-from app.rag.retrieval_types import RewriteStatus
+from app.rag.retrieval_types import RetrievalMetrics, RewriteStatus
 from app.rag.service import sse_event
 
 
@@ -32,6 +33,14 @@ def evidence() -> Evidence:
     )
 
 
+def settings(*, query_planning_enabled: bool) -> Settings:
+    return Settings(
+        session_secret="s" * 32,
+        encryption_master_key="e" * 32,
+        query_planning_enabled=query_planning_enabled,
+    )
+
+
 @pytest.mark.asyncio
 async def test_standalone_question_with_history_skips_rewrite(
     monkeypatch: pytest.MonkeyPatch,
@@ -40,6 +49,11 @@ async def test_standalone_question_with_history_skips_rewrite(
         raise AssertionError("standalone questions must not be rewritten")
 
     monkeypatch.setattr(service, "complete_json", unexpected_rewrite)
+    monkeypatch.setattr(
+        service,
+        "get_settings",
+        lambda: settings(query_planning_enabled=True),
+    )
 
     plan, usage = await service._resolve_query(
         "What is the Tokyo hotel limit?",
@@ -52,6 +66,34 @@ async def test_standalone_question_with_history_skips_rewrite(
 
 
 @pytest.mark.asyncio
+async def test_query_planning_disabled_skips_rewrite_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def unexpected_rewrite(_: object) -> GenerationResult:
+        raise AssertionError("disabled query planning must not call the provider")
+
+    monkeypatch.setattr(service, "complete_json", unexpected_rewrite)
+    monkeypatch.setattr(
+        service,
+        "get_settings",
+        lambda: settings(query_planning_enabled=False),
+    )
+    metrics = RetrievalMetrics()
+
+    plan, usage = await service._resolve_query(
+        "Does that apply during the second week?",
+        [HistoryMessage(role="user", content="How many remote days are allowed?")],
+        metrics=metrics,
+    )
+
+    assert plan.effective_query == "Does that apply during the second week?"
+    assert plan.status == RewriteStatus.UNCHANGED
+    assert metrics.rewrite_status == RewriteStatus.UNCHANGED.value
+    assert metrics.rewrite_latency_ms == 0
+    assert usage == {}
+
+
+@pytest.mark.asyncio
 async def test_referential_follow_up_uses_original_question_when_rewrite_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -59,6 +101,11 @@ async def test_referential_follow_up_uses_original_question_when_rewrite_fails(
         raise GenerationProviderError("The local generation model returned invalid JSON")
 
     monkeypatch.setattr(service, "complete_json", invalid_rewrite)
+    monkeypatch.setattr(
+        service,
+        "get_settings",
+        lambda: settings(query_planning_enabled=True),
+    )
 
     plan, usage = await service._resolve_query(
         "Does that apply during the second week?",

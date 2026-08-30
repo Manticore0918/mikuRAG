@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     reranker_batch_size: int = Field(default=8, ge=1, le=64)
     reranker_timeout_seconds: float = Field(default=15, ge=1, le=120)
     reranker_max_concurrency: int = Field(default=1, ge=1, le=8)
+    query_planning_enabled: bool = False
     query_rewrite_timeout_seconds: float = Field(default=10, ge=1, le=120)
     query_embedding_cache_enabled: bool = False
     retrieval_cache_enabled: bool = False
@@ -116,6 +117,7 @@ class Settings(BaseSettings):
     reindex_max_attempts: int = Field(default=3, ge=1, le=10)
     reindex_batch_delay_seconds: float = Field(default=2, ge=0, le=300)
     reindex_stale_after_seconds: int = Field(default=900, ge=60, le=86_400)
+    celery_visibility_timeout_seconds: int = Field(default=900, ge=60, le=86_400)
     ingestion_stale_after_seconds: int = Field(default=900, ge=60, le=86_400)
     ingestion_busy_retry_seconds: int = Field(default=30, ge=5, le=300)
     stale_turn_seconds: int = Field(default=900, ge=60, le=86_400)

@@ -1,0 +1,101 @@
+{
+  "schema_version": "portfolio_evidence_v1",
+  "evidence_kind": "synthetic_capacity_smoke",
+  "measured_at": "2026-08-30",
+  "status": "completed_diagnostic",
+  "claim_boundary": {
+    "headline_eligible": false,
+    "reason": "single-host synthetic smoke; excludes database and provider latency"
+  },
+  "source": {
+    "git_revision": "0206601cd9311fc0c7b559e3f20a4598a16db71d",
+    "source_state": "benchmark implementation matched the revision; unrelated working-tree changes were present",
+    "python": "3.12.13",
+    "platform": "Windows"
+  },
+  "command": "cd backend && ..\\.venv\\Scripts\\python.exe -m app.benchmark_cli --profile smoke",
+  "configuration": {
+    "profile": "smoke",
+    "max_pages": 500,
+    "page_counts": [10],
+    "blocks_per_page": 1,
+    "words_per_block": 20,
+    "concurrent_pages": 10,
+    "concurrent_jobs": 2,
+    "workers": 2,
+    "knowledge_base_pages": 10,
+    "knowledge_base_documents": 2,
+    "retrieval_candidates": 30,
+    "retrieval_documents": 5,
+    "warm_runs": 3
+  },
+  "report": {
+    "schema_version": "capacity_benchmark_v1",
+    "profile": "smoke",
+    "concurrent_ingestion": {
+      "documents_per_second": 328.947,
+      "duration_ms": 6.08,
+      "job_count": 2,
+      "profile_name": "concurrent",
+      "total_child_count": 20,
+      "total_parent_count": 20,
+      "worker_count": 2
+    },
+    "ingestion": [
+      {
+        "profile_name": "10_page",
+        "page_count": 10,
+        "parent_count": 10,
+        "child_count": 10,
+        "embedding_count": 10,
+        "embedding_input_tokens": 721,
+        "source_bytes": 2682,
+        "estimated_storage_bytes": 46364,
+        "peak_worker_memory_bytes": 86689,
+        "memory_amplification": 32.323,
+        "extraction_ms": 0.714,
+        "normalization_ms": 1.775,
+        "chunk_construction_ms": 12.497,
+        "total_ms": 15.091
+      },
+      {
+        "profile_name": "500_page",
+        "page_count": 500,
+        "parent_count": 500,
+        "child_count": 500,
+        "embedding_count": 500,
+        "embedding_input_tokens": 36491,
+        "source_bytes": 135784,
+        "estimated_storage_bytes": 2321568,
+        "peak_worker_memory_bytes": 3090288,
+        "memory_amplification": 22.759,
+        "extraction_ms": 34.161,
+        "normalization_ms": 53.586,
+        "chunk_construction_ms": 688.068,
+        "total_ms": 778.019
+      }
+    ],
+    "knowledge_base": {
+      "document_count": 2,
+      "duration_ms": 5.762,
+      "estimated_storage_bytes": 92728,
+      "profile_name": "knowledge_base",
+      "total_child_count": 20,
+      "total_embedding_count": 20,
+      "total_pages": 20,
+      "total_parent_count": 20
+    },
+    "retrieval": {
+      "candidate_count": 30,
+      "cold_pipeline_ms": 1.739,
+      "document_count": 5,
+      "evidence_tokens": 363,
+      "mean_reranker_ms": 0.273,
+      "selected_evidence_count": 6,
+      "warm_mean_pipeline_ms": 1.658,
+      "warm_p95_pipeline_ms": 1.707
+    },
+    "database_query_latency": "Not measured; use retrieval_decision observations on a representative PostgreSQL dataset."
+  }
+}
+

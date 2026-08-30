@@ -45,6 +45,15 @@ def _case(
         split=split,
         relevance_grades={"a": 3},
         filter_correct=None,
+        measurement={
+            "latency_ms": {"retrieval": 10.0, "total": 15.0},
+            "tokens": {"query_embedding": 4, "generation_total": 8},
+            "cache": {"query_embedding": "miss", "retrieval": "hit"},
+            "cost": {
+                "estimated_api_spend": 0.001,
+                "unpriced_token_count": 2,
+            },
+        },
     )
 
 
@@ -110,6 +119,23 @@ def test_aggregate_report_includes_by_split_ingestion_and_confidence_intervals()
         "ci_low": None,
         "ci_high": None,
     }
+    assert set(report["confidence_intervals_by_split"]) == {"test", "train"}
+    assert report["confidence_intervals_by_split"]["test"]["recall_at_10"][
+        "ci_low"
+    ] == 1
+    measurements = report["turn_measurements"]
+    assert measurements["latency_ms"]["retrieval"] == {
+        "p50": 10.0,
+        "p95": 10.0,
+        "p99": 10.0,
+    }
+    assert measurements["cache"]["retrieval"] == {"hit": 4}
+    assert measurements["cost"] == {
+        "currency": "USD",
+        "estimated_api_spend": 0.004,
+        "estimate_complete": False,
+        "unpriced_token_count": 8,
+    }
 
 
 def test_aggregate_report_empty_run_has_no_by_split_metrics() -> None:
@@ -134,6 +160,7 @@ def test_aggregate_report_empty_run_has_no_by_split_metrics() -> None:
     assert report["by_split"] == {}
     assert report["by_category"] == {}
     assert report["confidence_intervals"] is None
+    assert report["confidence_intervals_by_split"] == {}
 
 
 def test_markdown_report_covers_quality_ingestion_and_confidence(tmp_path: Path) -> None:
@@ -146,6 +173,9 @@ def test_markdown_report_covers_quality_ingestion_and_confidence(tmp_path: Path)
     assert "## Ingestion and storage" in markdown
     assert "## Metrics by split" in markdown
     assert "## Bootstrap confidence intervals" in markdown
+    assert "### Bootstrap confidence intervals: test split" in markdown
+    assert "## Latency, tokens, cache, and cost" in markdown
+    assert "| `retrieval` | 10.0000 | 10.0000 | 10.0000 |" in markdown
     assert "`token_recursive_v1`" in markdown
     assert CHUNKING_CONFIG_HASH[:16] in markdown
     assert "250" in markdown

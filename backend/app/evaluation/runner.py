@@ -799,6 +799,8 @@ async def execute_evaluation(
     configuration = dict(
         active_runtime.public_configuration(include_answers=options.include_answers)
     )
+    configuration["dataset_review_status"] = dataset.review_status
+    configuration["dataset_headline_eligible"] = dataset.headline_eligible
     configuration["bootstrap_samples"] = options.bootstrap_samples
     configuration["bootstrap_seed"] = options.bootstrap_seed
     raw_config_hash = configuration.get("chunking_config_hash")

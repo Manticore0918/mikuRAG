@@ -46,6 +46,13 @@ def build_comparison_report(
         _validate_run(profile, run)
 
     version = _evaluation_set_version(runs)
+    headline_eligibilities = {
+        bool(run.configuration.get("dataset_headline_eligible", False))
+        for run in runs.values()
+    }
+    if len(headline_eligibilities) != 1:
+        raise ValueError("comparison runs disagree on dataset headline eligibility")
+    dataset_headline_eligible = headline_eligibilities.pop()
     splits = sorted({item.split for run in runs.values() for item in run.cases})
     headline = headline_split or ("test" if "test" in splits else None)
 
@@ -75,6 +82,7 @@ def build_comparison_report(
         thresholds=thresholds,
         baseline_profile=baseline_profile,
         headline_split=headline,
+        dataset_headline_eligible=dataset_headline_eligible,
     )
     for profile, verdict in acceptance_by_profile.items():
         comparison[profile]["acceptance"] = verdict
@@ -82,6 +90,7 @@ def build_comparison_report(
     return {
         "schema_version": _SCHEMA_VERSION,
         "evaluation_set_version": version,
+        "dataset_headline_eligible": dataset_headline_eligible,
         "headline_split": headline,
         "baseline_profile": baseline_profile,
         "profiles": list(runs),
@@ -113,6 +122,8 @@ def render_compare_markdown(report: dict[str, object]) -> str:
         "",
         f"- Schema: `{report['schema_version']}`",
         f"- Evaluation set: `{report['evaluation_set_version']}`",
+        f"- Dataset headline eligible: "
+        f"{'yes' if report.get('dataset_headline_eligible') else 'no'}",
         f"- Baseline profile: `{baseline}`",
         f"- Headline metrics{split_label}",
         "",
@@ -198,7 +209,20 @@ def _acceptance_verdicts(
     thresholds: AcceptanceThresholds,
     baseline_profile: str,
     headline_split: str | None,
+    dataset_headline_eligible: bool,
 ) -> dict[str, dict[str, object] | None]:
+    if not dataset_headline_eligible:
+        return {
+            profile: (
+                None
+                if profile == baseline_profile
+                else {
+                    "ready_for_default_rollout": False,
+                    "reason": "evaluation dataset is not headline eligible",
+                }
+            )
+            for profile in runs
+        }
     baseline_cases = _cases_in_split(runs[baseline_profile].cases, headline_split)
     if not baseline_cases:
         return {profile: None for profile in runs}

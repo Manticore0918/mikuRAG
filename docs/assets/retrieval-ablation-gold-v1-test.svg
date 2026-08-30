@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="920" viewBox="0 0 1400 920" role="img" aria-labelledby="title description">
+  <title id="title">Retrieval quality and latency trade-off on the gold_v1 diagnostic test split</title>
+  <desc id="description">Horizontal bars compare Recall at 10, MRR at 10, and NDCG at 10 for vector, PostgreSQL full text, BM25, hybrid reciprocal-rank fusion, and reranked hybrid retrieval. Latency is listed separately.</desc>
+  <rect width="1400" height="920" rx="28" fill="#0b1020"/>
+  <text x="72" y="78" fill="#f8fafc" font-family="Inter,Segoe UI,sans-serif" font-size="38" font-weight="700">Retrieval quality / latency trade-off</text>
+  <text x="72" y="116" fill="#94a3b8" font-family="Inter,Segoe UI,sans-serif" font-size="18">gold_v1 · diagnostic synthetic test split · 13 cases · higher quality is better</text>
+
+  <g font-family="Inter,Segoe UI,sans-serif" font-size="16">
+    <rect x="72" y="146" width="16" height="16" rx="4" fill="#22d3ee"/><text x="98" y="160" fill="#cbd5e1">Recall@10</text>
+    <rect x="212" y="146" width="16" height="16" rx="4" fill="#a78bfa"/><text x="238" y="160" fill="#cbd5e1">MRR@10</text>
+    <rect x="336" y="146" width="16" height="16" rx="4" fill="#fbbf24"/><text x="362" y="160" fill="#cbd5e1">NDCG@10</text>
+    <text x="1180" y="160" fill="#cbd5e1" font-weight="600">Retrieval p95</text>
+  </g>
+
+  <g stroke="#25304a" stroke-width="1">
+    <line x1="300" y1="190" x2="300" y2="806"/>
+    <line x1="480" y1="190" x2="480" y2="806"/>
+    <line x1="660" y1="190" x2="660" y2="806"/>
+    <line x1="840" y1="190" x2="840" y2="806"/>
+    <line x1="1020" y1="190" x2="1020" y2="806"/>
+  </g>
+  <g fill="#64748b" font-family="Inter,Segoe UI,sans-serif" font-size="14" text-anchor="middle">
+    <text x="300" y="184">0</text><text x="480" y="184">0.25</text><text x="660" y="184">0.50</text><text x="840" y="184">0.75</text><text x="1020" y="184">1.00</text>
+  </g>
+
+  <g font-family="Inter,Segoe UI,sans-serif">
+    <text x="72" y="248" fill="#f8fafc" font-size="22" font-weight="650">Vector</text><text x="72" y="272" fill="#64748b" font-size="14">pgvector</text>
+    <rect x="300" y="218" width="637" height="13" rx="6" fill="#22d3ee"/><rect x="300" y="240" width="540" height="13" rx="6" fill="#a78bfa"/><rect x="300" y="262" width="605" height="13" rx="6" fill="#fbbf24"/>
+    <text x="948" y="230" fill="#67e8f9" font-size="14">0.885</text><text x="850" y="252" fill="#c4b5fd" font-size="14">0.750</text><text x="916" y="274" fill="#fde68a" font-size="14">0.841</text><text x="1180" y="250" fill="#e2e8f0" font-size="20" font-weight="650">15.6 ms</text>
+
+    <line x1="72" y1="308" x2="1328" y2="308" stroke="#1e293b"/>
+    <text x="72" y="368" fill="#f8fafc" font-size="22" font-weight="650">FTS baseline</text><text x="72" y="392" fill="#64748b" font-size="14">PostgreSQL FTS</text>
+    <rect x="300" y="338" width="55" height="13" rx="6" fill="#22d3ee"/><rect x="300" y="360" width="55" height="13" rx="6" fill="#a78bfa"/><rect x="300" y="382" width="55" height="13" rx="6" fill="#fbbf24"/>
+    <text x="366" y="350" fill="#67e8f9" font-size="14">0.077</text><text x="366" y="372" fill="#c4b5fd" font-size="14">0.077</text><text x="366" y="394" fill="#fde68a" font-size="14">0.077</text><text x="1180" y="370" fill="#e2e8f0" font-size="20" font-weight="650">7.4 ms</text>
+
+    <line x1="72" y1="428" x2="1328" y2="428" stroke="#1e293b"/>
+    <text x="72" y="488" fill="#f8fafc" font-size="22" font-weight="650">BM25</text><text x="72" y="512" fill="#64748b" font-size="14">pg_search BM25</text>
+    <rect x="300" y="458" width="683" height="13" rx="6" fill="#22d3ee"/><rect x="300" y="480" width="623" height="13" rx="6" fill="#a78bfa"/><rect x="300" y="502" width="642" height="13" rx="6" fill="#fbbf24"/>
+    <text x="994" y="470" fill="#67e8f9" font-size="14">0.949</text><text x="934" y="492" fill="#c4b5fd" font-size="14">0.865</text><text x="953" y="514" fill="#fde68a" font-size="14">0.892</text><text x="1180" y="490" fill="#e2e8f0" font-size="20" font-weight="650">29.3 ms</text>
+
+    <line x1="72" y1="548" x2="1328" y2="548" stroke="#1e293b"/>
+    <text x="72" y="608" fill="#f8fafc" font-size="22" font-weight="650">Hybrid RRF</text><text x="72" y="632" fill="#64748b" font-size="14">pgvector + BM25</text>
+    <rect x="300" y="578" width="692" height="13" rx="6" fill="#22d3ee"/><rect x="300" y="600" width="572" height="13" rx="6" fill="#a78bfa"/><rect x="300" y="622" width="639" height="13" rx="6" fill="#fbbf24"/>
+    <text x="1003" y="590" fill="#67e8f9" font-size="14">0.962</text><text x="883" y="612" fill="#c4b5fd" font-size="14">0.795</text><text x="950" y="634" fill="#fde68a" font-size="14">0.887</text><text x="1180" y="610" fill="#e2e8f0" font-size="20" font-weight="650">50.6 ms</text>
+
+    <line x1="72" y1="668" x2="1328" y2="668" stroke="#1e293b"/>
+    <text x="72" y="728" fill="#f8fafc" font-size="22" font-weight="650">Hybrid + reranker</text><text x="72" y="752" fill="#64748b" font-size="14">RRF + MiniLM cross-encoder</text>
+    <rect x="300" y="698" width="683" height="13" rx="6" fill="#22d3ee"/><rect x="300" y="720" width="600" height="13" rx="6" fill="#a78bfa"/><rect x="300" y="742" width="656" height="13" rx="6" fill="#fbbf24"/>
+    <text x="994" y="710" fill="#67e8f9" font-size="14">0.949</text><text x="911" y="732" fill="#c4b5fd" font-size="14">0.833</text><text x="967" y="754" fill="#fde68a" font-size="14">0.911</text><text x="1180" y="730" fill="#fca5a5" font-size="20" font-weight="650">4,914 ms</text>
+  </g>
+
+  <rect x="72" y="822" width="1256" height="1" fill="#25304a"/>
+  <text x="72" y="860" fill="#94a3b8" font-family="Inter,Segoe UI,sans-serif" font-size="16">Interpretation: BM25 and hybrid retrieval improve this frozen diagnostic corpus; the cross-encoder adds NDCG but dominates latency.</text>
+  <text x="72" y="888" fill="#64748b" font-family="Inter,Segoe UI,sans-serif" font-size="14">Not headline-eligible · source: docs/evidence/retrieval-ablation-gold-v1-test-2026-08-28.json</text>
+</svg>

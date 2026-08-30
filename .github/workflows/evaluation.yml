@@ -1,8 +1,9 @@
 name: Evaluation
 
-# Scheduled/manual full evaluation with real providers. This job uses
-# protected repository secrets, so it only runs on the origin repository
-# (never for fork pull requests) and is never required for CI.
+# Scheduled/manual full evaluation with real providers. Manual and tag-release
+# invocations run in any repository and fail before startup when protected
+# configuration is missing. Scheduled runs require an explicit repository
+# opt-in, and this workflow is never required for pull-request CI.
 
 on:
   workflow_call:
@@ -34,10 +35,13 @@ jobs:
   full-evaluation:
     name: Full provider-backed evaluation
     runs-on: ubuntu-latest
-    if: github.repository == 'Manticore0918/mikuRAG'
+    timeout-minutes: 120
+    if: github.event_name != 'schedule' || vars.MIKURAG_SCHEDULED_EVALUATION_ENABLED == 'true'
     environment: evaluation
     env:
       MIKURAG_EMBEDDING_API_KEY: ${{ secrets.MIKURAG_EMBEDDING_API_KEY }}
+      MIKURAG_EMBEDDING_ENDPOINT: ${{ vars.MIKURAG_EMBEDDING_ENDPOINT }}
+      MIKURAG_EMBEDDING_MODEL_ID: ${{ vars.MIKURAG_EMBEDDING_MODEL_ID }}
       MIKURAG_GENERATION_API_KEY: ${{ secrets.MIKURAG_GENERATION_API_KEY }}
       MIKURAG_GENERATION_BASE_URL: ${{ vars.MIKURAG_GENERATION_BASE_URL }}
       MIKURAG_GENERATION_MODEL_ID: ${{ vars.MIKURAG_GENERATION_MODEL_ID }}
@@ -45,10 +49,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate protected provider configuration
         run: |
-          test -n "$MIKURAG_EMBEDDING_API_KEY" || { echo "Missing MIKURAG_EMBEDDING_API_KEY" >&2; exit 1; }
-          test -n "$MIKURAG_GENERATION_API_KEY" || { echo "Missing MIKURAG_GENERATION_API_KEY" >&2; exit 1; }
-          test -n "$MIKURAG_GENERATION_BASE_URL" || { echo "Missing MIKURAG_GENERATION_BASE_URL" >&2; exit 1; }
-          test -n "$MIKURAG_GENERATION_MODEL_ID" || { echo "Missing MIKURAG_GENERATION_MODEL_ID" >&2; exit 1; }
+          require() {
+            local name="$1"
+            test -n "${!name:-}" || { echo "Missing $name" >&2; exit 1; }
+          }
+          require_https() {
+            local name="$1"
+            require "$name"
+            case "${!name}" in
+              https://*) ;;
+              *) echo "$name must use https://" >&2; exit 1 ;;
+            esac
+          }
+          require MIKURAG_EMBEDDING_API_KEY
+          require_https MIKURAG_EMBEDDING_ENDPOINT
+          require MIKURAG_EMBEDDING_MODEL_ID
+          require MIKURAG_GENERATION_API_KEY
+          require_https MIKURAG_GENERATION_BASE_URL
+          require MIKURAG_GENERATION_MODEL_ID
       - name: Prepare .env
         run: |
           cat > .env <<'EOF'

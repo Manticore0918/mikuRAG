@@ -372,8 +372,8 @@ invalidation. All cache behavior remains feature-off by default.
 
 The exit gate is not yet complete. Remaining work is tracked in
 `docs/EVALUATION-CHECKPOINT-4.md`: human claim-map audit/calibration, reviewed
-external prices, PostgreSQL/Redis cold-warm and failure integration tests, and a
-real quality/latency/cost report plus trace-style waterfall.
+external prices, execution of the new PostgreSQL/Redis cache scenarios in CI,
+and a real quality/latency/cost report plus trace-style waterfall.
 
 ### Outcome
 
@@ -439,18 +439,23 @@ reranker quality lift versus added p95 latency.
 
 ## Checkpoint 5 — CI/CD and production observability
 
-### Status — Implemented locally (2026-08-28), CI runs pending first push
+### Status — Implemented; hardening fixes validated locally (2026-08-30)
 
 PR CI is in place (`.github/workflows/ci.yml`: Ruff/pytest, frontend
 lint/test/build, clean- and previous-release Alembic upgrades, real-PostgreSQL
 and Redis integration tests behind the `integration` marker, image builds, and
 a compose smoke with deterministic stub providers, an evaluation subset with
-report-schema validation, and an observability-pipeline check). Tag releases
+typed report-contract validation, and an observability-pipeline check). The
+checkpoint baseline has completed successfully in GitHub Actions; the current
+hardening fixes still require their post-push CI run. Tag releases
 publish GHCR images with SBOM/provenance and rollback notes after a protected
 provider-backed evaluation gate, and attach that evaluation report bundle
-(`release.yml`). The scheduled/manual full evaluation is gated to the origin
-repository, while the synthetic capacity workflow needs no provider secrets
-(`evaluation.yml`, `capacity.yml`). Correlation IDs
+(`release.yml`). Manual and release evaluations validate explicit protected
+provider endpoints, model IDs, and API keys before startup. Scheduled provider
+evaluation requires the repository opt-in variable
+`MIKURAG_SCHEDULED_EVALUATION_ENABLED=true`, while the synthetic capacity
+workflow needs no provider secrets (`evaluation.yml`, `capacity.yml`). All
+runner jobs have bounded execution times. Correlation IDs
 (`X-Request-ID` → log records → observations → Celery headers → spans) are
 always on; OpenTelemetry tracing/metrics are flag-gated behind
 `MIKURAG_OTEL_ENABLED` with an optional `otel` extra and a separate
@@ -461,12 +466,10 @@ and redaction tests are in `scripts/provider_stub.py`,
 `tests/test_correlation.py`; docs live in `docs/OBSERVABILITY.md` and
 `docs/adr/0007-optional-opentelemetry-telemetry.md`.
 
-Remaining for the exit gate: push the branch and confirm the workflow runs
-green on GitHub (the local network cannot reach Docker Hub, so the
-collector/Prometheus/Tempo/Grafana images and the full compose smoke were
-validated by config + unit/SDK-level tests here, not by a live container run),
-then mark required checks in branch protection and tag a release to exercise
-`release.yml` end to end.
+Remaining for the exit gate: mark the CI jobs as required checks in branch
+protection, configure the protected `evaluation` environment and scheduled-run
+opt-in, then tag a release to exercise `release.yml` end to end. A redacted
+trace/dashboard capture is still needed for the portfolio proof.
 
 ### Outcome
 
@@ -526,6 +529,16 @@ Include a CI badge, release badge, architecture diagram, and redacted trace/dash
 screenshot in the README.
 
 ## Checkpoint 6 — Portfolio release
+
+### Status — In progress (started 2026-08-30)
+
+The outcome-focused README, versioned diagnostic evidence, experiment-decision
+ADRs, release-readiness checklist, media capture plan, and qualified résumé
+bullets are assembled. Local Docker migration, multi-format retrieval, restart
+recovery, isolated Compose, evaluation-schema, and telemetry-pipeline proofs
+passed on 2026-08-30. The `v1.0` tag remains blocked on Checkpoint 4's
+provider-backed answer/cold-warm evidence and human calibration, a clean-clone
+release-commit run, and the remaining authenticated redacted media captures.
 
 ### Outcome
 

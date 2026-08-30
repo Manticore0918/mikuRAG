@@ -478,12 +478,24 @@ def _ablation_table(
     """Assemble the per-config metric table from each mode's aggregate report."""
     rows: list[dict[str, object]] = []
     evaluation_set_version: str | None = None
+    dataset_headline_eligible: bool | None = None
     for label, result in results.items():
         aggregate = _as_mapping(result.aggregate)
         metrics = aggregate.get("metrics")
+        confidence_intervals = aggregate.get("confidence_intervals")
         if split != "all" and isinstance(aggregate.get("by_split"), dict):
             metrics = _as_mapping(aggregate.get("by_split")).get(split) or metrics
+            confidence_intervals = _as_mapping(
+                aggregate.get("confidence_intervals_by_split")
+            ).get(split)
         run = result.run
+        run_headline_eligible = bool(
+            run.configuration.get("dataset_headline_eligible", False)
+        )
+        if dataset_headline_eligible is None:
+            dataset_headline_eligible = run_headline_eligible
+        elif dataset_headline_eligible != run_headline_eligible:
+            raise ValueError("ablation runs disagree on dataset headline eligibility")
         mode = str(run.configuration.get("retrieval_mode") or label.split(":", 1)[0])
         query_planning = bool(run.configuration.get("query_planning", True))
         cases = [
@@ -525,11 +537,15 @@ def _ablation_table(
                 "ndcg_at_10": _metric(metrics, "ndcg_at_10"),
                 "retrieval_latency_p95_ms": _metric(metrics, "retrieval_latency_p95_ms"),
                 "mean_evidence_tokens": _metric(metrics, "mean_evidence_tokens"),
+                "confidence_intervals": _headline_confidence_intervals(
+                    confidence_intervals
+                ),
                 "effective_lexical_kinds": lexical_kinds,
                 "effective_reranker_providers": reranker_providers,
                 "fallback_used": bm25_fallback or reranker_fallback,
                 "valid_for_headline": (
                     run.status == "completed"
+                    and run_headline_eligible
                     and not bm25_fallback
                     and not reranker_fallback
                     and learned_reranker_ran
@@ -541,6 +557,7 @@ def _ablation_table(
     return {
         "schema_version": 1,
         "evaluation_set_version": evaluation_set_version,
+        "dataset_headline_eligible": bool(dataset_headline_eligible),
         "headline_split": "all" if split == "all" else split,
         "configs": rows,
     }
@@ -553,27 +570,47 @@ def _metric(metrics: object, name: str) -> float | None:
     return float(value) if isinstance(value, (int, float)) else None
 
 
+def _headline_confidence_intervals(value: object) -> dict[str, object]:
+    intervals = _as_mapping(value)
+    return {
+        name: _as_mapping(intervals.get(name))
+        for name in ("recall_at_10", "mean_reciprocal_rank", "ndcg_at_10")
+        if isinstance(intervals.get(name), dict)
+    }
+
+
 def _render_ablation_markdown(table: dict[str, object]) -> str:
     lines = [
         f"# Retrieval-mode ablation (`{table['evaluation_set_version']}`)",
         "",
         f"- Headline split: `{table['headline_split']}`",
+        f"- Dataset headline eligible: "
+        f"{'yes' if table.get('dataset_headline_eligible') else 'no'}",
         f"- Configs: {len(table['configs'])}",
         "",
         "| Requested mode | Query | Effective lexical leg | Effective reranker | "
-        "Headline valid | Recall@10 | MRR@10 | NDCG@10 | p95 retrieval (ms) | "
-        "Mean evidence tokens |",
-        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |",
+        "Headline valid | Recall@10 (95% CI) | MRR@10 (95% CI) | NDCG@10 (95% CI) | "
+        "p95 retrieval (ms) | Mean evidence tokens |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |",
     ]
     for row in table["configs"]:
+        recall = _fmt_score_with_ci(
+            row["recall_at_10"], row["confidence_intervals"], "recall_at_10"
+        )
+        reciprocal_rank = _fmt_score_with_ci(
+            row["mean_reciprocal_rank"],
+            row["confidence_intervals"],
+            "mean_reciprocal_rank",
+        )
+        ndcg = _fmt_score_with_ci(
+            row["ndcg_at_10"], row["confidence_intervals"], "ndcg_at_10"
+        )
         lines.append(
             f"| `{row['mode']}` | {'rewritten' if row['query_planning'] else 'original'} | "
             f"{_fmt_list(row['effective_lexical_kinds'])} | "
             f"{_fmt_list(row['effective_reranker_providers'])} | "
             f"{'yes' if row['valid_for_headline'] else 'no'} | "
-            f"{_fmt_score(row['recall_at_10'])} | "
-            f"{_fmt_score(row['mean_reciprocal_rank'])} | "
-            f"{_fmt_score(row['ndcg_at_10'])} | "
+            f"{recall} | {reciprocal_rank} | {ndcg} | "
             f"{_fmt_latency(row['retrieval_latency_p95_ms'])} | "
             f"{_fmt_tokens(row['mean_evidence_tokens'])} |"
         )
@@ -583,6 +620,16 @@ def _render_ablation_markdown(table: dict[str, object]) -> str:
 
 def _fmt_score(value: float | None) -> str:
     return "-" if value is None else f"{value:.4f}"
+
+
+def _fmt_score_with_ci(value: object, intervals: object, name: str) -> str:
+    score = _fmt_score(float(value) if isinstance(value, (int, float)) else None)
+    interval = _as_mapping(_as_mapping(intervals).get(name))
+    low = interval.get("ci_low")
+    high = interval.get("ci_high")
+    if not isinstance(low, (int, float)) or not isinstance(high, (int, float)):
+        return score
+    return f"{score} [{float(low):.4f}, {float(high):.4f}]"
 
 
 def _fmt_latency(value: float | None) -> str:

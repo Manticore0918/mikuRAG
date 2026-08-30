@@ -60,6 +60,7 @@ def build_aggregate_report(run: EvaluationRunRecord) -> dict[str, Any]:
         report["by_split"] = {}
         report["by_category"] = {}
         report["confidence_intervals"] = None
+        report["confidence_intervals_by_split"] = {}
         return report
 
     report["metrics"] = asdict(evaluation_metrics(run.cases))
@@ -76,6 +77,13 @@ def build_aggregate_report(run: EvaluationRunRecord) -> dict[str, Any]:
         for category in categories
     }
     report["confidence_intervals"] = _confidence_intervals(run)
+    report["confidence_intervals_by_split"] = {
+        split: _confidence_intervals(
+            run,
+            cases=tuple(item for item in run.cases if item.split == split),
+        )
+        for split in splits
+    }
     if not run.include_answers:
         report["metrics"]["answer_faithfulness"] = None
         for metrics in report["by_category"].values():
@@ -413,6 +421,30 @@ def _markdown_report(run: EvaluationRunRecord, aggregate: dict[str, Any]) -> str
                 f"{_fmt_metric(interval.get('ci_high'))} |"
             )
         lines.append("")
+    intervals_by_split = aggregate.get("confidence_intervals_by_split")
+    if isinstance(intervals_by_split, dict) and intervals_by_split:
+        for split in sorted(intervals_by_split):
+            split_intervals = intervals_by_split[split]
+            if not isinstance(split_intervals, dict) or not split_intervals:
+                continue
+            lines.extend(
+                [
+                    f"### Bootstrap confidence intervals: {split} split",
+                    "",
+                    "| Metric | Mean | 95% CI low | 95% CI high |",
+                    "| --- | ---: | ---: | ---: |",
+                ]
+            )
+            for name in sorted(split_intervals):
+                interval = split_intervals[name]
+                if not isinstance(interval, dict):
+                    continue
+                lines.append(
+                    f"| `{name}` | {_fmt_metric(interval.get('mean'))} | "
+                    f"{_fmt_metric(interval.get('ci_low'))} | "
+                    f"{_fmt_metric(interval.get('ci_high'))} |"
+                )
+            lines.append("")
     if run.cases:
         lines.extend(
             [
@@ -447,15 +479,18 @@ def _write_text_atomic(path: Path, content: str) -> None:
 
 def _confidence_intervals(
     run: EvaluationRunRecord,
+    *,
+    cases: tuple[EvaluationCaseRecord, ...] | None = None,
 ) -> dict[str, dict[str, float]] | None:
+    selected = run.cases if cases is None else cases
     samples = int(run.configuration.get("bootstrap_samples") or 0)
-    if samples <= 0 or not run.cases:
+    if samples <= 0 or not selected:
         return None
     raw_seed = run.configuration.get("bootstrap_seed")
     seed = int(raw_seed) if isinstance(raw_seed, int) else None
     return bootstrap_confidence_intervals(
-        evaluation_case_definitions(run.cases),
-        evaluation_observations(run.cases),
+        evaluation_case_definitions(selected),
+        evaluation_observations(selected),
         samples=samples,
         seed=seed,
     )

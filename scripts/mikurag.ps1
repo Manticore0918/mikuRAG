@@ -27,7 +27,7 @@ try {
             Assert-NativeSuccess "Backend dependency installation"
             npm --prefix frontend ci
             Assert-NativeSuccess "Frontend dependency installation"
-            docker compose --profile tools run --rm migrate
+            docker compose --profile tools run --build --rm migrate
             Assert-NativeSuccess "Database migration"
             docker compose up --build -d
             Assert-NativeSuccess "Compose startup"

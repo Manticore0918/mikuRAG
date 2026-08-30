@@ -3,252 +3,249 @@
 [![CI](https://github.com/Manticore0918/mikuRAG/actions/workflows/ci.yml/badge.svg)](https://github.com/Manticore0918/mikuRAG/actions/workflows/ci.yml)
 [![Release](https://github.com/Manticore0918/mikuRAG/actions/workflows/release.yml/badge.svg)](https://github.com/Manticore0918/mikuRAG/actions/workflows/release.yml)
 
-mikuRAG is a self-hosted, multi-user private knowledge system for grounded answers with citations.
+mikuRAG turns a team’s mixed private documents into grounded answers whose
+claims can be inspected against source-specific Citations. It is a self-hosted,
+multi-user FastAPI/React system with durable background Ingestion, PostgreSQL as
+the authority, hybrid retrieval, validated local-model output, and explicit
+privacy and failure boundaries.
 
-The stable default path uses legacy character chunking, pgvector semantic search,
-PostgreSQL full-text search, reciprocal-rank fusion, validated Grounded Answers,
-and server-owned Citations. Hierarchical chunking, parent/child expansion,
-generated summaries, rollout jobs, evaluation gates, and their observability are
-experimental and feature-off by default. They can be exercised explicitly
-without changing the stable retrieval path.
+The current public tag is `v0.1.0`. The repository is preparing `v1.0`; the
+[release-readiness checklist](./docs/PORTFOLIO-RELEASE.md) records the remaining
+evidence and deliberately prevents a premature portfolio release.
 
-Checkpoint 1 extends the reproducible baseline with heterogeneous, asynchronous
-Ingestion and source-specific provenance. PDF, HTML, Markdown, Python, and
-TypeScript can coexist in one Knowledge Base while the feature-flagged
-hierarchical implementation remains experimental.
+![Grounded Answer with an expanded PDF Citation](./docs/assets/checkpoint-0-baseline.png)
 
-## Local container startup
+## Why this project exists
 
-1. Copy `.env.example` to `.env` and replace every placeholder secret.
-2. Run the database migration explicitly:
+Many RAG demos stop at “retrieve text and ask a model.” mikuRAG focuses on the
+engineering work needed after that demo:
 
-   ```powershell
-   docker compose --profile tools run --rm migrate
-   ```
+- asynchronous, resumable, observable ingestion of heterogeneous sources;
+- tenant and Ready-state predicates applied before retrieval limits;
+- lexical and semantic retrieval that can be measured independently;
+- server-owned Citations and fail-closed answer validation;
+- deletion/re-index cache invalidation without making Redis authoritative; and
+- reproducible evaluation, CI, migrations, release artifacts, and privacy-safe
+  telemetry.
 
-3. Start the foundation:
+## Architecture
 
-   ```powershell
-   docker compose up --build
-   ```
+```mermaid
+flowchart LR
+    B["Browser"] --> N["React + nginx"] --> A["FastAPI API"]
+    A --> P[("PostgreSQL + pgvector")]
+    A --> R[("Redis: sessions, Celery, optional derived cache")]
+    A --> G["Local generation model"]
+    A -->|"enqueue"| W["Celery worker"]
+    W --> U[("Persistent uploads")]
+    W --> P
+    W --> E["Configured embedding provider"]
+    T["Beat scheduler"] --> R
+    A -. "opt-in traces/metrics" .-> O["OTel → Tempo / Prometheus / Grafana"]
+    W -. "opt-in traces/metrics" .-> O
+```
 
-4. Create the first Administrator in a separate terminal:
+PostgreSQL owns Users, access grants, Document lifecycle, chunks, vectors,
+Conversations, Citations, measurements, and Knowledge Base index generations.
+Redis contains only replaceable coordination/cache data. The stable retrieval
+default is pgvector plus PostgreSQL full-text search fused with RRF; pg_search
+BM25, query planning, the local cross-encoder, hierarchical retrieval, and
+derived caches are explicit experimental/optional paths.
 
-   ```powershell
-   docker compose run --rm backend python -m app.bootstrap_admin --username admin
-   ```
+## Five-minute seeded demo
 
-   The command prompts for a password of at least 12 characters and refuses to run after an Administrator exists.
+The interaction path takes about five minutes after first-time image pulls,
+dependency installs, and the local generation model are ready.
 
-5. Open `http://localhost:5173` and sign in. Administrators can provision Users, create Knowledge Bases, and manage access grants.
-
-Windows and POSIX entry points wrap the repeatable workflows:
+Prerequisites: Docker Compose, Python 3.12, Node 20+, an external
+OpenAI-compatible Ollama endpoint, and a configured embedding-provider key. Copy
+`.env.example` to `.env`, replace every placeholder, and use the exact model tag
+served by Ollama.
 
 ```powershell
+Copy-Item .env.example .env
+# Edit .env, including MIKURAG_EMBEDDING_API_KEY and generation endpoint/model.
 .\scripts\mikurag.ps1 setup
-.\scripts\mikurag.ps1 checks
-.\scripts\mikurag.ps1 migrations
-```
 
-```sh
-sh ./scripts/mikurag.sh setup
-sh ./scripts/mikurag.sh checks
-sh ./scripts/mikurag.sh migrations
-```
-
-Ollama remains external to Compose. Set `MIKURAG_GENERATION_BASE_URL` to its OpenAI-compatible `/v1` endpoint and set `MIKURAG_GENERATION_MODEL_ID` to the installed model tag. The approved default is `DeepSeek-R1-Distill-Qwen-7B`; if Ollama exposes it under a tag such as `deepseek-r1:7b`, use that exact tag in the environment.
-
-## Document Ingestion
-
-Set `MIKURAG_EMBEDDING_API_KEY` before ingesting Documents. The worker calls the configured Alibaba Model Studio endpoint with `tongyi-embedding-vision-flash-2026-03-06`; extracted chunks leave the Installation for embedding. The key is read from the API/worker environment and is never placed in a Redis task payload.
-
-Administrators can upload, inspect, retry, and delete text-extractable PDF, DOCX,
-TXT, Markdown, HTML, Python, JavaScript, and TypeScript Documents. Files are
-limited to 50 MB and PDFs to 500 pages. Text source files must be valid UTF-8.
-Scanned or image-only PDFs, malformed source files, and unsafe inputs fail with a
-bounded user-facing error because OCR is outside this MVP.
-
-Uploads are split into sequential 5 MiB parts. PostgreSQL records the confirmed byte offset and the persistent upload volume retains incomplete bytes, so a transfer can resume after network loss, page reload, or API restart. The Administrator reselects the same file after a reload; mikuRAG verifies its SHA-256 before continuing. Open Upload Sessions expire after 24 hours without activity, and the scheduled `beat` service removes expired or orphaned temporary data hourly.
-
-A source becomes a Document only after all bytes arrive and the server independently verifies its total size, SHA-256, and format. At most 20 Upload Sessions can remain open across the Installation, while the existing 50 MB and 500-page limits remain unchanged.
-
-PostgreSQL is authoritative for `pending`, `processing`, `ready`, `failed`, and `deleting` states. Chunks and vectors are committed only when a Document becomes `ready`. Deletion changes the state to `deleting` before background removal, allowing retrieval to exclude it immediately.
-
-The Administrator view exposes the durable Ingestion stage, percentage,
-attempts, parser/chunker versions, and safe warnings. Document provenance stores
-source kind, language, tags, URI or repository-relative path, and validated JSON
-metadata. Only a small retrieval-relevant allowlist is copied to chunk locators;
-secret-like metadata keys are rejected.
-
-### Provenance and Citation proof
-
-| Source | Extracted structure | Stored locator | Rendered Citation |
-| --- | --- | --- | --- |
-| PDF | pages and layout blocks | `page`, `start_page`, `end_page` | `p. 14` or `pp. 14–15` |
-| HTML | title, heading path, content element, text offsets | `heading_path`, `element`, `line_start/end`, `text_start/end`, source URI | heading · element · lines |
-| Markdown | heading hierarchy and source lines | `heading_path`, `line_start/end` | heading · lines |
-| Python | module and AST-discovered symbols | repository-relative `path`, `symbol`, `line_start/end`, `language` | `path/to/file.py:40–55 · symbol()` |
-| TypeScript/JavaScript | top-level declarations with a line-aware fallback | repository-relative `path`, `symbol`, `line_start/end`, `language` | `src/client.ts:12–18 · symbol` |
-
-## Grounded chat
-
-Each Conversation is permanently scoped to one Knowledge Base. Every turn rechecks access, rewrites follow-up references using recent history, embeds the standalone query, and performs both pgvector semantic search and PostgreSQL full-text search over Ready Documents in that Knowledge Base. Reciprocal-rank fusion selects a bounded evidence set.
-
-The local model returns structured claims linked to Evidence identifiers. mikuRAG buffers and validates the complete model response, creates Citation markers itself, persists retained excerpts, and only then sends answer text to the browser. Missing evidence, conflicting evidence, unknown Citation identifiers, and unverifiable output produce an explicit inability to answer reliably rather than unsupported factual text.
-
-Conversation endpoints use Server-Sent Events for progress and validated answer delivery. The reverse proxy disables buffering and allows up to ten minutes for slower local generation.
-
-Every completed turn also stores a redacted measurement record with stage
-latencies, token and candidate counts, cache outcomes, model versions, and an
-estimate from the versioned pricing ledger. Optional Redis query-embedding and
-retrieval-ID caches are feature-off by default; PostgreSQL index generations make
-old entries unreachable after Ready, deletion, or re-index transitions. Redis
-failure falls back to uncached retrieval, and final answers are not cached.
-
-## Phase 2 security behavior
-
-- Passwords use Argon2id hashing.
-- Browser sessions are signed, HTTP-only, same-site cookies and are checked against current User state on every request.
-- Disabling a User, changing their Administrator role, or resetting their password invalidates existing sessions.
-- Browser mutations require a matching CSRF cookie and header.
-- Failed login attempts are throttled through Redis without revealing whether a username exists.
-- Non-Administrators receive `404 Not Found` for Knowledge Bases they are not assigned, avoiding resource disclosure.
-
-## Development checks
-
-Every pull request runs the same checks in CI (`.github/workflows/ci.yml`):
-backend Ruff + pytest, frontend ESLint + Vitest + production build, Alembic
-upgrade checks from a clean database and from the previous release schema,
-real-PostgreSQL/Redis integration tests, backend/frontend image builds, and a
-Compose smoke test with stubbed model providers plus an evaluation-subset
-report-schema check. Tagged releases publish immutable GHCR images with SBOMs
-and rollback guidance.
-
-Backend checks run from `backend` after installing the `dev` extra:
-
-```powershell
-python -m pytest
-python -m ruff check --no-cache .
-python -m pytest -m integration   # needs live PostgreSQL/Redis (CI runs these)
-```
-
-Frontend checks run from `frontend`:
-
-```powershell
-npm test
-npm run lint
-npm run build
-```
-
-The end-to-end Compose smoke (isolated `mikurag-smoke` project, deterministic
-provider stubs) runs locally with:
-
-```powershell
-python scripts/compose_smoke.py
-```
-
-## Observability (optional, feature-off by default)
-
-Correlation IDs are always on: every API response carries `X-Request-ID`,
-every log record and observation event carries it, and it propagates to Celery
-tasks so one question can be followed across API, worker, database, cache, and
-model calls.
-
-OpenTelemetry traces and metrics are opt-in. With the observability override
-and profile enabled, Grafana (`localhost:3000`) renders the provisioned
-quality/operations dashboard, Prometheus holds the metrics and initial SLO
-alerts, and Tempo stores the traces:
-
-```yaml
-# .env
-MIKURAG_OTEL_ENABLED=true
-```
-
-```powershell
-docker compose -f compose.yaml -f compose.observability.yaml `
-  --profile observability up -d
-```
-
-Telemetry carries identifiers, counts, durations, and statuses only — never
-query, answer, or Document text. See [`docs/OBSERVABILITY.md`](./docs/OBSERVABILITY.md)
-for the metric catalogue, SLOs, failure drills, and the privacy boundary.
-
-## Executable evaluation
-
-The reviewed `gold_v1` corpus (64 questions across train/dev/test splits with
-graded qrels) is ingested into a unique, isolated Knowledge Base and queried
-through the production embedding and hybrid retrieval path:
-
-```powershell
-.\scripts\mikurag.ps1 evaluate
-```
-
-The runner waits for real Celery Ingestion, writes `raw-run.json`, `report.json`,
-and `report.md` under `backend/evaluation/results/`, then deletes its Knowledge
-Base and managed source files. The evaluation CLI exposes three subcommands:
-
-- `run` — execute one configuration (`--chunking-version`, `--retrieval-mode`,
-  `--reranker`, `--answers`, `--max-cases` for a CI smoke subset).
-- `compare` — run every chunking profile against the same corpus and produce
-  Recall/MRR/NDCG, latency, token, and storage results with a per-candidate
-  acceptance gate on the untouched test split.
-- `ablation` — run the retrieval experiment modes (`vector`, `fts_baseline`,
-  `bm25`, `hybrid_rrf`, `hybrid_rrf_reranked`) against the frozen split and
-  publish a Recall@10/MRR@10/NDCG@10/p95/evidence-token table to
-  `backend/evaluation/results/ablation/<version>/<split>/`.
-
-See [`docs/EVALUATION-RUNNER.md`](./docs/EVALUATION-RUNNER.md) for the lifecycle,
-retrieval modes, corpus schema, failure behavior, and artifact contract.
-Checkpoint 4's schema-v3 faithfulness metrics, accounting contract, cache keys,
-and remaining exit-gate work are documented in
-[`docs/EVALUATION-CHECKPOINT-4.md`](./docs/EVALUATION-CHECKPOINT-4.md).
-
-## Reproducible baseline demo
-
-The versioned demo contains a two-page PDF plus Markdown, HTML, Python, and
-TypeScript sources. Nine questions cover exact identifiers, paraphrase,
-follow-up rewriting, page/heading/element/path locators, insufficient evidence,
-and an authorization boundary. The idempotent seed sends all five Documents
-through the real worker; legacy demo rows are re-ingested once to add parser and
-chunker version provenance.
-
-Set two temporary passwords in your shell, then run the seed, structural smoke,
-and restart-durability checks:
-
-```powershell
 $env:MIKURAG_DEMO_ADMIN_PASSWORD = "replace-with-a-demo-admin-password"
 $env:MIKURAG_DEMO_USER_PASSWORD = "replace-with-a-demo-user-password"
 .\scripts\mikurag.ps1 seed
 .\scripts\mikurag.ps1 smoke
-.\scripts\mikurag.ps1 restart-smoke
 ```
 
+Open `http://localhost:5173`, sign in as the seeded demo User, and ask the
+versioned PDF, Markdown, HTML, Python, and TypeScript questions. The seed is
+idempotent and waits for the real worker to publish all Documents as `Ready`.
+If Windows reserves port 5173, set `MIKURAG_FRONTEND_PORT` to a free host port
+before starting Compose and open that port instead.
+
+POSIX shells provide the same workflow:
+
 ```sh
+cp .env.example .env
+sh ./scripts/mikurag.sh setup
 export MIKURAG_DEMO_ADMIN_PASSWORD='replace-with-a-demo-admin-password'
 export MIKURAG_DEMO_USER_PASSWORD='replace-with-a-demo-user-password'
 sh ./scripts/mikurag.sh seed
 sh ./scripts/mikurag.sh smoke
-sh ./scripts/mikurag.sh restart-smoke
 ```
 
-The worker still uses the configured embedding provider, and the interactive
-questions use the configured generation provider. See
-[`docs/BASELINE-DEMO.md`](./docs/BASELINE-DEMO.md) for the exact proof script and
-expected evidence.
+The [baseline demo guide](./docs/BASELINE-DEMO.md) lists the questions, expected
+evidence, authorization check, restart-durability check, and cleanup procedure.
 
-![Checkpoint-0 grounded answer with an expanded page-1 Citation](./docs/assets/checkpoint-0-baseline.png)
+## Sources and Citation behavior
 
-## Documentation
+Uploads are resumable in sequential 5 MiB parts. The server independently
+verifies size, SHA-256, and format before creating a Document; the worker then
+extracts, normalizes, chunks, embeds, and atomically publishes it as `Ready`.
+Files are limited to 50 MB and PDFs to 500 pages.
 
-- Product language: [`CONTEXT.md`](./CONTEXT.md)
-- Checkpoint-1 multi-source demo and proof script: [`docs/BASELINE-DEMO.md`](./docs/BASELINE-DEMO.md)
-- Executable evaluation runner: [`docs/EVALUATION-RUNNER.md`](./docs/EVALUATION-RUNNER.md)
-- Approved MVP plan: [`docs/MVP-PLAN.md`](./docs/MVP-PLAN.md)
-- Hierarchical chunking rollout and rollback: [`docs/CHUNKING-CONFIG.md`](./docs/CHUNKING-CONFIG.md)
-- Hierarchical chunking observation events: [`docs/CHUNKING-OBSERVABILITY.md`](./docs/CHUNKING-OBSERVABILITY.md)
-- Chunking performance and capacity profiles: [`docs/CHUNKING-PERFORMANCE.md`](./docs/CHUNKING-PERFORMANCE.md)
-- Hierarchical chunking rollout operations: [`docs/CHUNKING-ROLLOUT.md`](./docs/CHUNKING-ROLLOUT.md)
-- Default-rollout acceptance gates: [`docs/CHUNKING-ACCEPTANCE.md`](./docs/CHUNKING-ACCEPTANCE.md)
-- Hierarchical chunking risk controls: [`docs/CHUNKING-RISKS.md`](./docs/CHUNKING-RISKS.md)
-- Observability, CI/CD, correlation IDs, and telemetry privacy: [`docs/OBSERVABILITY.md`](./docs/OBSERVABILITY.md)
-- Architectural decisions: [`docs/adr`](./docs/adr)
+| Source | Extracted structure | Citation locator shown to the User |
+| --- | --- | --- |
+| PDF | page-aware layout blocks | page or page range |
+| DOCX | paragraphs and tables | paragraph/table locator when available |
+| TXT | UTF-8 text blocks | source line range |
+| Markdown | heading hierarchy, lists, tables, fenced code | heading path and source lines |
+| HTML | title, headings, semantic elements, text offsets | heading, element, lines, and safe source URI |
+| Python | AST-discovered module, class, and function symbols | repository-relative path, line range, symbol |
+| JavaScript / TypeScript | top-level declarations with line-aware fallback | repository-relative path, line range, symbol |
+
+Citations are created after the model response is fully buffered and validated.
+The model may refer only to supplied Evidence IDs; the server creates markers,
+persists retained excerpts, and exposes original source bytes only after a fresh
+authorization check. Unknown evidence, missing/conflicting support, or invalid
+structured output returns an explicit inability to answer reliably.
+
+## Measured retrieval diagnostics
+
+The executable harness ingests a redistributable synthetic corpus through the
+real worker, queries the production retrieval path, writes raw and aggregate
+reports, and deletes its isolated Knowledge Base. The current corpus contains 64
+reviewed questions over 14 Documents; the frozen test slice contains 13 cases.
+
+| Mode | Recall@10 | MRR@10 | NDCG@10 | Retrieval p95 | Mean evidence tokens |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Vector | 0.8846 | 0.7500 | 0.8408 | 15.6 ms | 290 |
+| PostgreSQL FTS baseline | 0.0769 | 0.0769 | 0.0769 | 7.4 ms | 0 |
+| pg_search BM25 | 0.9487 | 0.8654 | 0.8922 | 29.3 ms | 272 |
+| Vector + BM25 + RRF | 0.9615 | 0.7949 | 0.8871 | 50.6 ms | 300 |
+| Hybrid + local cross-encoder | 0.9487 | 0.8333 | 0.9107 | 4,914.3 ms | 267 |
+
+![Retrieval quality and latency trade-off](./docs/assets/retrieval-ablation-gold-v1-test.svg)
+
+These are diagnostics, not general benchmark claims: `gold_v1` is small,
+synthetic, self-authored, and explicitly marked `headline_eligible: false`. The
+[committed evidence envelope](./docs/evidence/retrieval-ablation-gold-v1-test-2026-08-28.json)
+records the exact commit, manifest blob, command, configuration, run IDs, and
+full-precision values. The [analysis](./docs/EVALUATION-CHECKPOINT-3.md) explains
+confidence intervals and category results.
+
+The evidence drove conservative defaults. BM25 improved aggregate diagnostics
+but did not prove the expected exact-identifier advantage. The cross-encoder
+improved hybrid NDCG by 0.0236 while exceeding the 1,500 ms p95 target by more
+than three times, so both BM25 promotion and learned reranking remain off by
+default. Reranker failure is visible and falls back to the already-authorized RRF
+order.
+
+Run a small evaluation with:
+
+```powershell
+docker compose --profile tools run --rm evaluate `
+  python -m app.evaluation_cli run --max-cases 3
+```
+
+See the [evaluation runner contract](./docs/EVALUATION-RUNNER.md) for complete
+commands, schemas, cleanup behavior, comparisons, and ablations. A separate
+[synthetic capacity smoke artifact](./docs/evidence/capacity-smoke-2026-08-30.json)
+proves the benchmark schema but is not a production-capacity claim.
+
+## Reliability, security, and privacy boundaries
+
+- Passwords use Argon2id. Signed HTTP-only same-site sessions are rechecked
+  against current User state; password reset, role change, or disabling a User
+  invalidates existing sessions.
+- Browser mutations require a matching CSRF cookie/header. Login failures are
+  throttled without disclosing whether a username exists.
+- A Conversation is permanently scoped to one Knowledge Base. Unauthorized
+  Knowledge Bases return `404`, and authorization, `Ready` state, embedding
+  model, and metadata filters are SQL predicates before candidate limits.
+- Ingestion state is durable in PostgreSQL. Retrieval excludes a Document as
+  soon as deletion begins; publication and deletion advance an authoritative
+  index generation that makes stale Redis entries unreachable.
+- Redis errors, BM25 absence, reranker failure, query-rewrite failure, and
+  unavailable optional telemetry degrade to documented stable paths. Final
+  answers are never cached by default.
+- Every response has an `X-Request-ID`; it propagates to worker tasks and redacted
+  observations. Opt-in telemetry carries identifiers, counts, durations, and
+  statuses—not query, answer, Evidence, or Document text.
+- Release CI runs Ruff/pytest, frontend tests/lint/build, clean and previous-head
+  migrations, real PostgreSQL/Redis integration tests, image builds, Compose
+  smoke, and a schema-validated evaluation subset. Tagged releases are designed
+  to publish immutable images, SBOMs, checksums, evaluation evidence, and rollback
+  guidance.
+
+The 2026-08-30 [local release-candidate smoke record](./docs/evidence/release-candidate-smoke-2026-08-30.json)
+captures the migration, multi-format retrieval, hard-worker-kill recovery,
+isolated Compose, evaluation-schema, and complete telemetry-pipeline proofs. It
+is explicitly marked as dirty-worktree functional evidence, not a clean-clone
+benchmark.
+
+## Known limitations and tradeoffs
+
+- Extracted chunks leave the Installation for the configured Alibaba embedding
+  endpoint. Self-hosting the control plane does not remove this external data
+  boundary. Provider retention and regional processing must be reviewed by the
+  operator.
+- Ollama is external to Compose. Generation quality, latency, hardware needs, and
+  model licensing depend on the operator’s chosen local model.
+- OCR is out of scope. Scanned/image-only PDFs fail with a bounded error; PDFs are
+  text-extraction only.
+- JavaScript/TypeScript extraction intentionally covers top-level declarations,
+  not a full compiler/type graph. Malformed sources use a line-aware fallback.
+- `gold_v1` is not externally representative. Answer-faithfulness calibration,
+  a provider-backed cold/warm report, and a real trace waterfall remain release
+  gates; no complete API-cost or answer-quality headline is published yet.
+- Hierarchical chunking, summary generation, rollout jobs, query planning,
+  pg_search BM25 promotion, the cross-encoder, and derived caches are feature-off
+  or non-default until their frozen evaluation and operational gates pass.
+- Derived caching and the observability profile are optional. Redis remains
+  required for Celery coordination and login throttling; PostgreSQL, the upload
+  volume, the worker, and working model providers are required for the full
+  application.
+
+## Engineering decisions
+
+| Decision | Rationale |
+| --- | --- |
+| [PostgreSQL + pgvector](./docs/adr/0002-postgresql-and-pgvector.md) | One authority for access, lifecycle, provenance, and vector retrieval |
+| [pg_search BM25 with FTS fallback](./docs/adr/0005-pg-search-bm25.md) | Real lexical scoring without making an optional extension a hard dependency |
+| [Generation-versioned Redis caches](./docs/adr/0006-redis-derived-cache-invalidation.md) | Immediate logical invalidation without cache-key scans |
+| [Privacy-safe optional telemetry](./docs/adr/0007-optional-opentelemetry-telemetry.md) | Operability without private content or a larger default stack |
+| [Version-complete experiment identity](./docs/adr/0008-version-complete-experiment-identity.md) | Prevent comparisons across silently different corpora/configurations |
+| [Fused-order reranker fallback](./docs/adr/0009-reranker-falls-back-to-fused-order.md) | Preserve retrieval availability and make degraded experiments visible |
+| [Deterministic reviewed evaluator](./docs/adr/0010-deterministic-evaluation-judge.md) | Auditable faithfulness baseline before any LLM judge |
+
+## Development checks
+
+```powershell
+.\scripts\mikurag.ps1 checks
+.\scripts\mikurag.ps1 migrations
+.\scripts\mikurag.ps1 compose-smoke
+```
+
+Equivalent direct commands are documented in the scripts and CI workflows. The
+provider-backed full evaluation is intentionally separate from fast pull-request
+checks.
+
+## Project evidence and operations
+
+- [Portfolio release readiness](./docs/PORTFOLIO-RELEASE.md)
+- [Portfolio media and redaction plan](./docs/PORTFOLIO-MEDIA.md)
+- [Truthful résumé bullets](./docs/RESUME-BULLETS.md)
+- [Versioned evidence index](./docs/evidence/README.md)
+- [Baseline demo](./docs/BASELINE-DEMO.md)
+- [Evaluation runner](./docs/EVALUATION-RUNNER.md)
+- [Observability, SLOs, and drills](./docs/OBSERVABILITY.md)
+- [Chunking configuration and rollout](./docs/CHUNKING-CONFIG.md)
+- [Architecture decisions](./docs/adr)
+- [Product language](./CONTEXT.md)

@@ -6,7 +6,6 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-
 ROOT = Path(__file__).resolve().parents[1]
 RUN_ID = uuid.uuid4().hex[:8]
 DATABASES = (
@@ -87,6 +86,7 @@ def main() -> None:
                 main_database,
             ],
             cwd=ROOT,
+            check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -127,12 +127,15 @@ def main() -> None:
             )
 
         _alembic(base_url, DATABASES[0], "upgrade", "head")
-        _alembic(base_url, DATABASES[0], "downgrade", "0005")
+        _alembic(base_url, DATABASES[0], "downgrade", "0007")
         _alembic(base_url, DATABASES[0], "upgrade", "head")
 
-        _alembic(base_url, DATABASES[1], "upgrade", "0005")
+        _alembic(base_url, DATABASES[1], "upgrade", "0007")
         _alembic(base_url, DATABASES[1], "upgrade", "head")
-        print("Migration smoke passed: clean, 0005 upgrade, 0008 rollback, and re-upgrade")
+        print(
+            "Migration smoke passed: clean, 0007 previous-release upgrade, "
+            "head-to-0007 rollback, and re-upgrade"
+        )
     finally:
         for database in DATABASES:
             subprocess.run(

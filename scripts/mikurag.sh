@@ -14,7 +14,7 @@ case "$COMMAND" in
     test -x .venv/bin/python || python3 -m venv .venv
     .venv/bin/python -m pip install -e './backend[dev]'
     npm --prefix frontend ci
-    docker compose --profile tools run --rm migrate
+    docker compose --profile tools run --build --rm migrate
     docker compose up --build -d
     ;;
   checks)

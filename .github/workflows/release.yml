@@ -14,6 +14,8 @@ permissions:
 jobs:
   release-evaluation:
     name: Provider-backed release quality gate
+    # GitHub does not accept timeout-minutes on a reusable-workflow caller;
+    # evaluation.yml enforces the 120-minute limit on its runner job.
     uses: ./.github/workflows/evaluation.yml
     with:
       max_cases: ""
@@ -23,6 +25,7 @@ jobs:
   publish-images:
     name: Publish immutable images to GHCR
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs: release-evaluation
     steps:
       - uses: actions/checkout@v4
@@ -130,6 +133,7 @@ jobs:
   github-release:
     name: Tagged release with rollback guidance
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [release-evaluation, publish-images]
     permissions:
       contents: write

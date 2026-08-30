@@ -13,12 +13,16 @@ celery_app = Celery(
 celery_app.conf.update(
     accept_content=["json"],
     broker_connection_retry_on_startup=True,
+    broker_transport_options={
+        "visibility_timeout": settings.celery_visibility_timeout_seconds,
+    },
     enable_utc=True,
     task_acks_late=True,
     task_ignore_result=True,
     task_reject_on_worker_lost=True,
     task_serializer="json",
     timezone="UTC",
+    visibility_timeout=settings.celery_visibility_timeout_seconds,
     worker_prefetch_multiplier=1,
     beat_schedule={
         "cleanup-expired-upload-sessions": {

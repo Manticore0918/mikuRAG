@@ -13,7 +13,7 @@ then:
 
 The stack runs under the isolated ``mikurag-smoke`` Compose project, so the
 script never touches a development installation and always tears its own
-volumes down. Port 5173 must be free while it runs.
+volumes down. Set ``MIKURAG_SMOKE_FRONTEND_PORT`` when port 5173 is unavailable.
 """
 
 import hashlib
@@ -25,10 +25,12 @@ import uuid
 from pathlib import Path
 
 import httpx
+from evaluation_report_validation import validate_evaluation_report
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-BASE_URL = "http://localhost:5173/api/v1"
+FRONTEND_PORT = os.environ.get("MIKURAG_SMOKE_FRONTEND_PORT", "5173")
+BASE_URL = f"http://localhost:{FRONTEND_PORT}/api/v1"
 PROJECT = "mikurag-smoke"
 
 STUB_ENVIRONMENT = {
@@ -76,6 +78,8 @@ def _run(arguments: list[str], *, capture: bool = True, check: bool = True) -> s
         cwd=ROOT,
         check=False,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=capture,
     )
     if check and result.returncode != 0:
@@ -153,6 +157,7 @@ def _wait_for_postgres(postgres_user: str, postgres_database: str) -> None:
                 postgres_database,
             ),
             cwd=ROOT,
+            check=False,
             capture_output=True,
             text=True,
         )
@@ -285,6 +290,7 @@ def main() -> None:
     os.environ["POSTGRES_PASSWORD"] = SMOKE_DATABASE_PASSWORD
     os.environ["MIKURAG_DATABASE_URL"] = SMOKE_DATABASE_URL
     os.environ["MIKURAG_REDIS_URL"] = SMOKE_REDIS_URL
+    os.environ["MIKURAG_FRONTEND_PORT"] = FRONTEND_PORT
     otel_enabled = os.environ.get("MIKURAG_SMOKE_OTEL") == "1"
     if otel_enabled:
         # The observability override deliberately requires explicit Grafana
@@ -471,9 +477,7 @@ def main() -> None:
                 raise RuntimeError("The evaluation subset produced no report.json")
             with reports[-1].open(encoding="utf-8") as handle:
                 report = json.load(handle)
-            for key in ("schema_version", "case_count", "metrics", "by_category"):
-                if key not in report:
-                    raise RuntimeError(f"Evaluation report is missing '{key}'")
+            validate_evaluation_report(report, expected_case_count=2)
             print(
                 f"  report schema_version={report['schema_version']} "
                 f"cases={report['case_count']}"

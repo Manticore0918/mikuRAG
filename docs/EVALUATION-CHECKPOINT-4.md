@@ -23,7 +23,9 @@ the stable retrieval defaults.
 - API-cost estimates use the checked-in `pricing_v1.json` ledger. Local
   generation is recorded as zero API spend and explicitly excludes compute
   cost. Tokens without a reviewed price remain visible as unpriced; they are not
-  silently assigned a zero cost.
+  silently assigned a zero cost. Embedding entries are priced by provider and
+  model when present, and a query-embedding cache hit records zero billable
+  embedding tokens while retaining the query-token volume for diagnostics.
 - Query-embedding and retrieval-result Redis caches are optional and disabled by
   default. Keys use an HMAC of normalized query text and include Knowledge Base,
   normalized filters, embedding model, chunking version, retrieval configuration
@@ -52,6 +54,11 @@ Run the same frozen evaluation configuration once cold and once warm. Compare
 version in the generated report. Do not compare runs with different dataset,
 git, chunking, embedding, or retrieval identities.
 
+The integration suite now covers cold/warm equivalence, deletion and re-index
+generation invalidation, poisoned cross-Knowledge-Base cache isolation, and a
+complete persisted Grounded Answer while Redis is unavailable. These tests use
+real PostgreSQL and Redis services and run in the CI integration job.
+
 ## Remaining before the exit gate
 
 - Human-review the generated claim-to-evidence mappings and add a calibrated
@@ -59,8 +66,7 @@ git, chunking, embedding, or retrieval identities.
   deterministic evaluator remains the baseline either way.
 - Add reviewed external embedding/generation prices or an operator-supplied
   ledger before publishing a complete API-spend figure.
-- Add PostgreSQL/Redis integration tests that demonstrate cold/warm equivalence,
-  immediate deletion/re-index invalidation, cross-Knowledge-Base isolation, and
-  a complete Grounded Answer while Redis is unavailable.
+- Confirm the new PostgreSQL/Redis cache scenarios pass in the post-push CI run;
+  local collection passes, but Docker services were unavailable for a live run.
 - Commit a real cold/warm quality/latency/cost report and a representative
   trace-style waterfall. No placeholder performance numbers are permitted.

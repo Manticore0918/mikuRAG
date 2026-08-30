@@ -70,7 +70,10 @@ def _run(profile: str, cases: tuple[EvaluationCaseRecord, ...]) -> EvaluationRun
         knowledge_base_name=None,
         knowledge_base_cleaned_up=True,
         include_answers=False,
-        configuration={"chunking_version": profile},
+        configuration={
+            "chunking_version": profile,
+            "dataset_headline_eligible": True,
+        },
         documents=(),
         cases=cases,
         chunking_config_hash="c" * 64,
@@ -133,6 +136,27 @@ def test_candidate_clearing_acceptance_gate_is_ready_for_default() -> None:
     assert statuses["retrieval_quality_materially_improves"] == "pass"
     assert statuses["retrieval_p95_latency"] == "pass"
     assert statuses["average_evidence_tokens"] == "pass"
+
+
+def test_ineligible_dataset_cannot_clear_rollout_gate() -> None:
+    baseline = _run("legacy_char_v1", (_case("case-0"),))
+    candidate = _run("hierarchical_v1", (_case("case-0"),))
+    baseline.configuration["dataset_headline_eligible"] = False
+    candidate.configuration["dataset_headline_eligible"] = False
+
+    report = build_comparison_report(
+        runs={"legacy_char_v1": baseline, "hierarchical_v1": candidate},
+        thresholds=THRESHOLDS,
+        baseline_profile="legacy_char_v1",
+        headline_split="test",
+    )
+
+    assert report["dataset_headline_eligible"] is False
+    acceptance = report["comparison"]["hierarchical_v1"]["acceptance"]
+    assert acceptance == {
+        "ready_for_default_rollout": False,
+        "reason": "evaluation dataset is not headline eligible",
+    }
 
 
 def test_candidate_regressing_quality_fails_the_gate() -> None:

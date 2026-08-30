@@ -17,6 +17,7 @@ def _result(
     mode: str = "vector",
     query_planning: bool = True,
     bm25_hybrid_enabled: bool = False,
+    headline_eligible: bool = True,
 ) -> EvaluationExecutionResult:
     case = SimpleNamespace(
         split="test",
@@ -36,6 +37,7 @@ def _result(
             "retrieval_mode": mode,
             "query_planning": query_planning,
             "bm25_hybrid_enabled": bm25_hybrid_enabled,
+            "dataset_headline_eligible": headline_eligible,
         },
     )
     return EvaluationExecutionResult(run=run, aggregate=aggregate, artifacts=object())
@@ -141,6 +143,11 @@ def test_ablation_table_picks_split_metrics() -> None:
         },
     )
     aggregate["by_split"]["test"]["recall_at_10"] = 0.9
+    aggregate["confidence_intervals_by_split"] = {
+        "test": {
+            "recall_at_10": {"mean": 0.9, "ci_low": 0.7, "ci_high": 1.0}
+        }
+    }
     result = _result(aggregate=aggregate)
 
     table = evaluation_cli._ablation_table({"vector": result}, "test")
@@ -150,6 +157,11 @@ def test_ablation_table_picks_split_metrics() -> None:
     assert table["configs"][0]["mode"] == "vector"
     assert table["configs"][0]["recall_at_10"] == 0.9
     assert table["configs"][0]["mean_evidence_tokens"] == 800.0
+    assert table["configs"][0]["confidence_intervals"]["recall_at_10"] == {
+        "mean": 0.9,
+        "ci_low": 0.7,
+        "ci_high": 1.0,
+    }
 
 
 def test_ablation_table_uses_overall_metrics_for_all_split() -> None:
@@ -178,6 +190,11 @@ def test_ablation_markdown_renders_real_values_not_placeholders() -> None:
     )
     aggregate = result.aggregate
     aggregate["by_split"]["test"]["recall_at_10"] = 0.75  # type: ignore[index]
+    aggregate["confidence_intervals_by_split"] = {
+        "test": {
+            "recall_at_10": {"mean": 0.75, "ci_low": 0.5, "ci_high": 0.9}
+        }
+    }
 
     table = evaluation_cli._ablation_table({"vector": result}, "test")
     markdown = evaluation_cli._render_ablation_markdown(table)
@@ -186,6 +203,7 @@ def test_ablation_markdown_renders_real_values_not_placeholders() -> None:
     assert "rewritten" in markdown
     assert "`vector`" in markdown
     assert "0.7500" in markdown
+    assert "0.7500 [0.5000, 0.9000]" in markdown
     assert "120.0" in markdown
     assert "800" in markdown
     assert "?" not in markdown
@@ -219,6 +237,18 @@ def test_ablation_marks_bm25_fallback_as_not_headline_valid() -> None:
     assert row["fallback_used"] is True
     assert row["valid_for_headline"] is False
     assert row["effective_lexical_kinds"] == ["fts_fallback"]
+
+
+def test_ablation_rejects_headline_claims_for_ineligible_dataset() -> None:
+    result = _result(
+        aggregate=_aggregate(_full_metrics("overall")),
+        headline_eligible=False,
+    )
+
+    table = evaluation_cli._ablation_table({"vector": result}, "test")
+
+    assert table["dataset_headline_eligible"] is False
+    assert table["configs"][0]["valid_for_headline"] is False
 
 
 def test_ablation_marks_enabled_hybrid_bm25_fallback_as_not_headline_valid() -> None:

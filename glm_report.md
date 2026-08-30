@@ -207,3 +207,126 @@ Concrete workflow defects:
    cover the currently-untested purge path from Checkpoint 1).
 5. Add confidence intervals to the published ablation table and either honor or
    remove the `headline_eligible` flag.
+
+---
+
+# Addendum — First CI run failed (2026-08-29, run 33246605033)
+
+The `v0.1` commit was pushed and the CI workflow ran for the first time. Three
+of five jobs failed; the frontend job and the image-builds job passed. All
+three failures trace to two root causes in the pushed tree, not to workflow
+bugs.
+
+## Root cause A — `.gitignore` excluded the `app.uploads` package from the commit
+
+- The `.gitignore` rule `uploads/` (under "Runtime data and local databases",
+  meant for the runtime upload-storage directory) is unanchored, so it matches
+  any directory named `uploads` at any depth — including the application
+  package `backend/app/uploads/`.
+- As a result the entire package — `__init__.py`, `storage.py`, `cleanup.py`,
+  `tasks.py` — is absent from the pushed repository (verified with
+  `git ls-files backend/app/uploads/` → empty, and a disk-vs-tracked sweep that
+  found exactly these four untracked source files).
+- Everything works locally because the files exist on disk; CI checks out only
+  git-tracked files, so it breaks. This also means **anyone cloning the GitHub
+  repo gets a backend that cannot boot**: `backend/app/main.py:16,25,80`
+  imports the uploads router and `app.uploads.cleanup.reconcile_upload_sessions`
+  at startup.
+
+Effects on two jobs:
+
+1. **Integrations job — failed.** Test collection raises
+   `ModuleNotFoundError: No module named 'app.uploads'` in
+   `test_auth_api.py`, `test_authorization.py`, `test_health.py`,
+   `test_upload_api.py`, and `test_upload_storage.py`.
+2. **Compose smoke job — failed.** The CI-built backend image lacks the
+   package, the backend crashes on import, its healthcheck never passes, and
+   compose aborts with "dependency failed to start: container
+   mikurag-smoke-backend-1 is unhealthy".
+
+Fix:
+
+- Anchor the ignore rule so it cannot match the package: replace `uploads/`
+  with `/uploads/` and add `/backend/uploads/` (the runtime directory is
+  `./uploads` relative to the backend working directory, `config.py:22`).
+- `git add backend/app/uploads/` so the package is committed.
+
+## Root cause B — `.pytest_tmp` debris was committed (naming mismatch)
+
+- The `.gitignore` has `.pytest-tmp/` (hyphen) and Ruff's `extend-exclude` in
+  `backend/pyproject.toml:66` lists `.pytest-tmp` — but the actual pytest
+  `--basetemp` directory is `backend/.pytest_tmp` (underscore). Neither pattern
+  matches, so ~150 test-run artifacts (including deliberately malformed files
+  such as `broken.py` and a fixture `worker.py` with an unused `asyncio`
+  import) were committed and pushed.
+- **Ruff job — failed** with 6 errors, 4 of them inside
+  `backend/.pytest_tmp/` (I001 unsorted imports, F401 unused import). The other
+  2 are genuine violations independent of the debris.
+
+Fix:
+
+- `git rm -r --cached backend/.pytest_tmp` (and delete the directory), add
+  `.pytest_tmp/` to `.gitignore`, and align the Ruff `extend-exclude` to the
+  real name.
+
+## Standalone issue found by the Ruff job
+
+Two genuine `I001` (import block un-sorted/un-formatted) violations in
+`backend/tests/test_upload_api.py:1` and
+`backend/tests/test_upload_storage.py:1` — the `import pytest` line needs to be
+separated from the `from app.uploads.storage import ...` block. These will
+still fail Ruff after the debris is removed and must be fixed regardless.
+
+## Results table
+
+| Job | Result | Cause |
+| --- | --- | --- |
+| Backend / Ruff + pytest | failed | `.pytest_tmp` debris (4 errors) + 2 real I001s |
+| Integrations / PostgreSQL + Redis | failed | `app.uploads` package missing from commit |
+| Compose smoke | failed | same missing package → backend container unhealthy |
+| Frontend / ESLint + Vitest + build | passed | — |
+| Images / backend + frontend build | passed | — |
+
+Note: image builds "pass" despite the missing package because a build only
+copies files; nothing imports the app. CI passing on this job proves nothing
+about bootability — the compose smoke is the check that catches it, which is
+exactly what happened.
+
+## Fix sequence
+
+1. Anchor `uploads/` in `.gitignore` to `/uploads/` + `/backend/uploads/`; add
+   `.pytest_tmp/`.
+2. `git add backend/app/uploads/` and `git rm -r --cached backend/.pytest_tmp`.
+3. Fix the two I001 import blocks (or run `ruff check --fix`).
+4. Align `backend/pyproject.toml:66` Ruff `extend-exclude` with the real
+   `.pytest_tmp` name.
+5. Commit and push; CI should then exercise the paths the review predicted
+   (previous-release migration `0007 → 0011`, ParadeDB image tag, timeouts).
+6. Also revisit why the squashed `v0.1` commit was never validated locally
+   against a clean checkout (`git clone` or `git stash -u` style check) — a
+   clean-checkout smoke before pushing would have caught both root causes.
+
+## Resolution (2026-08-29)
+
+All three failed jobs are fixed and CI is green (runs 33247548833 →
+33247933591, commits `9b7022c` and `0206601`):
+
+- Commit `9b7022c` anchored the `uploads/` ignore rules, committed the
+  `backend/app/uploads/` package, removed the 133 committed `.pytest_tmp`
+  debris files, and aligned the Ruff exclude with the real name. This fixed
+  the Ruff job and the `app.uploads` import failures. (The two I001 violations
+  were a symptom, not a cause: without the `app.uploads` submodule on disk,
+  Ruff could not classify `app.uploads.storage` as first-party.)
+- Commit `0206601` fixed two deeper bugs that the first green Ruff step
+  exposed, both in code that had never run against a real environment:
+  - The integration fixture inserted a 32-character `content_hash`, violating
+    the `chunks_content_hash_length_ck` (64) database check; it now inserts a
+    sha256 hex digest.
+  - The compose smoke's `evaluate` step bind-mounted
+    `./backend/evaluation/results` into the unprivileged container; on a Linux
+    runner the mount is not writable by the image's uid, so creating the run
+    directory failed. The smoke script now creates the tree host-side and
+    opens its permissions before the run.
+
+Final job status on run 33247933591: Compose smoke, Integrations, Frontend,
+Backend Ruff+pytest, and Images — all SUCCESS.

@@ -29,6 +29,8 @@ ARCHITECTURE_ENV_KEYS = {
     "MIKURAG_WORKER_MEMORY_LIMIT_BYTES",
     "MIKURAG_REINDEX_MAX_ATTEMPTS",
     "MIKURAG_REINDEX_BATCH_DELAY_SECONDS",
+    "MIKURAG_CELERY_VISIBILITY_TIMEOUT_SECONDS",
+    "MIKURAG_QUERY_PLANNING_ENABLED",
     "MIKURAG_OTEL_ENABLED",
     "MIKURAG_OTEL_EXPORTER_ENDPOINT",
 }
@@ -137,6 +139,34 @@ def test_hierarchical_chunking_is_opt_in() -> None:
 
     assert legacy.chunking_version == "legacy"
     assert hierarchical.chunking_version == "hierarchical_v1"
+
+
+def test_query_planning_is_opt_in() -> None:
+    default = Settings(
+        session_secret="s" * 32,
+        encryption_master_key="e" * 32,
+    )
+    enabled = Settings(
+        session_secret="s" * 32,
+        encryption_master_key="e" * 32,
+        query_planning_enabled=True,
+    )
+
+    assert default.query_planning_enabled is False
+    assert enabled.query_planning_enabled is True
+
+
+def test_worker_recovery_window_defaults_to_ingestion_stale_window() -> None:
+    settings = Settings(
+        session_secret="s" * 32,
+        encryption_master_key="e" * 32,
+    )
+
+    assert settings.celery_visibility_timeout_seconds == 900
+    assert (
+        settings.celery_visibility_timeout_seconds
+        == settings.ingestion_stale_after_seconds
+    )
 
 
 def test_retrieval_budget_must_fit_chunk_and_item_limits() -> None:

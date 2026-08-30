@@ -1,0 +1,115 @@
+{
+  "schema_version": "portfolio_evidence_v1",
+  "evidence_kind": "release_candidate_smoke",
+  "measured_at": "2026-08-30",
+  "status": "completed_local_worktree",
+  "claim_boundary": {
+    "headline_eligible": false,
+    "reason": "This is functional release-candidate evidence from an uncommitted local worktree, not a clean-clone benchmark or provider-backed quality report."
+  },
+  "source": {
+    "base_git_revision": "0206601cd9311fc0c7b559e3f20a4598a16db71d",
+    "working_tree_clean": false,
+    "platform": "Windows Docker Desktop",
+    "frontend_host_port": 8080,
+    "frontend_container_port": 8080
+  },
+  "checks": [
+    {
+      "name": "backend_unit_suite",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest backend\\tests -m \"not integration\" --basetemp .pytest-tmp-cp6-20260830 -q",
+      "result": "pass",
+      "details": {
+        "passed": 363,
+        "deselected": 13
+      }
+    },
+    {
+      "name": "backend_lint",
+      "command": ".\\.venv\\Scripts\\ruff.exe check --no-cache backend scripts",
+      "result": "pass"
+    },
+    {
+      "name": "frontend_suite",
+      "commands": [
+        "npm test",
+        "npm run lint",
+        "npm run build"
+      ],
+      "result": "pass",
+      "details": {
+        "test_files": 5,
+        "tests": 11
+      }
+    },
+    {
+      "name": "migration",
+      "command": "docker compose --profile tools run --build --rm migrate",
+      "result": "pass",
+      "details": {
+        "alembic_head": "0011"
+      }
+    },
+    {
+      "name": "chunking_smoke",
+      "command": "docker compose run --rm backend python -m app.chunking_smoke",
+      "result": "pass",
+      "details": {
+        "source_types": ["pdf", "typescript", "html", "python", "markdown"]
+      }
+    },
+    {
+      "name": "retrieval_demo_smoke",
+      "command": "docker compose run --rm backend python -m app.demo_smoke --retrieval",
+      "result": "pass",
+      "details": {
+        "authorization_boundary": "pass",
+        "exact_evidence": "pass",
+        "source_types": ["pdf", "typescript", "html", "python", "markdown"],
+        "expected_evidence_rank": 1
+      }
+    },
+    {
+      "name": "restart_durability_smoke",
+      "command": ".\\.venv\\Scripts\\python.exe scripts\\restart_smoke.py",
+      "result": "pass",
+      "details": {
+        "backend_restart_open_upload": "pass",
+        "ingestion_after_worker_restart": "pass",
+        "stale_processing_recovery": "pass",
+        "document_status": "ready",
+        "failed_parser_consistency": "pass",
+        "failed_parser_retry": "pass",
+        "partial_chunks_after_failure": 0,
+        "smoke_visibility_timeout_seconds": 60,
+        "default_visibility_timeout_seconds": 900
+      }
+    },
+    {
+      "name": "isolated_compose_smoke",
+      "command": "$env:MIKURAG_SMOKE_FRONTEND_PORT='18080'; .\\.venv\\Scripts\\python.exe scripts\\compose_smoke.py",
+      "result": "pass",
+      "details": {
+        "migration": "pass",
+        "demo_seed": "pass",
+        "resumable_upload": "pass",
+        "grounded_answer_with_citations": "pass",
+        "citation_count": 5,
+        "evaluation_subset_and_report_schema": "pass",
+        "evaluation_cases": 2
+      }
+    },
+    {
+      "name": "isolated_observability_smoke",
+      "command": "$env:MIKURAG_SMOKE_FRONTEND_PORT='18082'; $env:MIKURAG_SMOKE_OTEL='1'; .\\.venv\\Scripts\\python.exe scripts\\compose_smoke.py",
+      "result": "pass",
+      "details": {
+        "collector_exporter_scraped": true,
+        "collector_self_telemetry_scraped": true,
+        "accepted_spans_observed": true,
+        "mikurag_rag_turns_total": 1,
+        "utf8_cleanup_output_verified": true
+      }
+    }
+  ]
+}

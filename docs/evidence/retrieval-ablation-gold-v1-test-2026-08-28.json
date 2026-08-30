@@ -1,0 +1,101 @@
+{
+  "schema_version": "portfolio_evidence_v1",
+  "evidence_kind": "retrieval_ablation",
+  "measured_at": "2026-08-28",
+  "status": "completed_diagnostic",
+  "claim_boundary": {
+    "headline_eligible": false,
+    "reason": "gold_v1 is a small synthetic, self-authored corpus and its manifest explicitly sets headline_eligible=false"
+  },
+  "source": {
+    "git_revision": "1ad7db708186d4b7fa48c53e120278d415bff6cf",
+    "manifest_git_blob": "e1c19b3f0b012b5f03fecbacf730c2e37e532de6",
+    "evaluation_set": "gold_v1",
+    "split": "test",
+    "case_count": 13,
+    "document_count": 14
+  },
+  "command": "docker compose --profile tools run --rm evaluate python -m app.evaluation_cli ablation --modes vector fts_baseline bm25 hybrid_rrf hybrid_rrf_reranked --reranker cross_encoder --bm25-hybrid-enabled --split test --query-planning off --timeout-seconds 180 --poll-seconds 1 --bootstrap-samples 1000 --bootstrap-seed 20260828",
+  "common_configuration": {
+    "chunking_version": "legacy",
+    "chunking_config_hash": "2e1db0738823e3f78fb76da53071473a19ed34f7b420790d8a00a7ed6903abcd",
+    "chunk_tokenizer": "conservative_v1",
+    "embedding_model_id": "tongyi-embedding-vision-flash-2026-03-06",
+    "generation_model_id": null,
+    "include_answers": false,
+    "hierarchical_retrieval_enabled": false,
+    "query_planning": false,
+    "bm25_hybrid_enabled": true,
+    "retrieval_semantic_candidates": 50,
+    "retrieval_lexical_candidates": 50,
+    "retrieval_rerank_candidates": 20,
+    "retrieval_evidence_limit": 8,
+    "retrieval_evidence_token_budget": 6000,
+    "retrieval_rrf_k": 60,
+    "retrieval_rrf_semantic_weight": 1.0,
+    "retrieval_rrf_lexical_weight": 1.0,
+    "bootstrap_samples": 1000,
+    "bootstrap_seed": 20260828,
+    "postgres_image": "paradedb/paradedb:0.25.5-pg16",
+    "postgres_version": "16.15",
+    "pg_search_version": "0.25.5"
+  },
+  "results": [
+    {
+      "mode": "vector",
+      "run_id": "vector-original-20260828T073111Z-93f873",
+      "effective_providers": ["pgvector"],
+      "fallback_used": false,
+      "recall_at_10": 0.8846153846153846,
+      "mrr_at_10": 0.75,
+      "ndcg_at_10": 0.8407674647610457,
+      "retrieval_p95_ms": 15.55747679667547,
+      "mean_evidence_tokens": 290.15384615384613
+    },
+    {
+      "mode": "fts_baseline",
+      "run_id": "fts_baseline-original-20260828T073129Z-03f628",
+      "effective_providers": ["postgres_fts"],
+      "fallback_used": false,
+      "recall_at_10": 0.07692307692307693,
+      "mrr_at_10": 0.07692307692307693,
+      "ndcg_at_10": 0.07692307692307693,
+      "retrieval_p95_ms": 7.405134999135042,
+      "mean_evidence_tokens": 0.0
+    },
+    {
+      "mode": "bm25",
+      "run_id": "bm25-original-20260828T073147Z-7f3d18",
+      "effective_providers": ["pg_search_bm25"],
+      "fallback_used": false,
+      "recall_at_10": 0.9487179487179488,
+      "mrr_at_10": 0.8653846153846154,
+      "ndcg_at_10": 0.8922132701305378,
+      "retrieval_p95_ms": 29.323237399512426,
+      "mean_evidence_tokens": 272.0769230769231
+    },
+    {
+      "mode": "hybrid_rrf",
+      "run_id": "hybrid_rrf-original-20260828T073207Z-056039",
+      "effective_providers": ["pgvector", "pg_search_bm25"],
+      "fallback_used": false,
+      "recall_at_10": 0.9615384615384616,
+      "mrr_at_10": 0.7948717948717949,
+      "ndcg_at_10": 0.8871389224878813,
+      "retrieval_p95_ms": 50.57123980077449,
+      "mean_evidence_tokens": 299.84615384615387
+    },
+    {
+      "mode": "hybrid_rrf_reranked",
+      "run_id": "hybrid_rrf_reranked-original-20260828T073228Z-d4b64b",
+      "effective_providers": ["pgvector", "pg_search_bm25", "cross_encoder/ms-marco-MiniLM-L-6-v2"],
+      "fallback_used": false,
+      "recall_at_10": 0.9487179487179488,
+      "mrr_at_10": 0.8333333333333334,
+      "ndcg_at_10": 0.9106931317247802,
+      "retrieval_p95_ms": 4914.320964401106,
+      "mean_evidence_tokens": 267.46153846153845
+    }
+  ]
+}
+

@@ -186,11 +186,17 @@ async def _resolve_query(
     *,
     metrics: RetrievalMetrics | None = None,
 ) -> tuple[QueryPlan, dict[str, int]]:
+    settings = get_settings()
     with telemetry.stage_span("rag.rewrite"):
+        if not settings.query_planning_enabled:
+            plan = QueryPlan(original_query=question)
+            if metrics is not None:
+                metrics.rewrite_status = plan.status.value
+            return plan, {}
         return await build_query_plan(
             question,
             history,
-            get_settings(),
+            settings,
             complete=complete_json,
             metrics=metrics,
         )

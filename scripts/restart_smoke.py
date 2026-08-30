@@ -9,10 +9,13 @@ from pathlib import Path
 
 import httpx
 
-
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-BASE_URL = "http://localhost:5173/api/v1"
+FRONTEND_PORT = os.environ.get("MIKURAG_FRONTEND_PORT", "5173")
+BASE_URL = os.environ.get(
+    "MIKURAG_BASE_URL",
+    f"http://localhost:{FRONTEND_PORT}/api/v1",
+).rstrip("/")
 
 
 def _run(arguments: list[str], *, capture: bool = False) -> str:
@@ -21,6 +24,8 @@ def _run(arguments: list[str], *, capture: bool = False) -> str:
         cwd=ROOT,
         check=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=capture,
     )
     return result.stdout.strip() if capture else ""
@@ -80,9 +85,11 @@ def _wait_for_document_status(
     client: httpx.Client,
     knowledge_base_id: str,
     document_id: str,
-    terminal_status: str,
+    expected_status: str,
     *,
     timeout_seconds: int = 180,
+    poll_seconds: float = 2,
+    fail_if_statuses: frozenset[str] = frozenset(),
 ) -> dict[str, object]:
     deadline = time.monotonic() + timeout_seconds
     latest: dict[str, object] | None = None
@@ -91,16 +98,23 @@ def _wait_for_document_status(
             client.get(f"/admin/knowledge-bases/{knowledge_base_id}/documents")
         ).json()
         latest = next((row for row in documents if row["id"] == document_id), None)
-        if latest is not None and latest["status"] == terminal_status:
-            return latest
-        time.sleep(2)
+        if latest is not None:
+            latest_status = str(latest["status"])
+            if latest_status == expected_status:
+                return latest
+            if latest_status in fail_if_statuses:
+                raise RuntimeError(
+                    f"Document {document_id} became {latest_status} before "
+                    f"{expected_status} could be observed"
+                )
+        time.sleep(poll_seconds)
     status = latest["status"] if latest is not None else "missing"
     raise RuntimeError(
-        f"Document {document_id} did not become {terminal_status}; status={status}"
+        f"Document {document_id} did not become {expected_status}; status={status}"
     )
 
 
-def main() -> None:
+def _run_restart_smoke() -> None:
     if not (ROOT / ".env").exists():
         raise SystemExit("Copy .env.example to .env and replace its placeholders first")
 
@@ -122,7 +136,7 @@ def main() -> None:
         if value is not None:
             os.environ[key] = str(value)
     sys.path.insert(0, str(BACKEND))
-    from app.security import (  # noqa: PLC0415
+    from app.security import (
         CSRF_COOKIE,
         SESSION_COOKIE,
         create_session_token,
@@ -150,10 +164,16 @@ def main() -> None:
         raise SystemExit("The restricted baseline Knowledge Base is missing")
 
     run_id = uuid.uuid4().hex[:10]
+    recovery_lines = "".join(
+        f"Recovery segment {index}: a worker that stops after claiming this Document "
+        "must leave a durable Processing checkpoint for a replacement worker.\n"
+        for index in range(256)
+    )
     content = (
         f"Checkpoint restart smoke {run_id}.\n"
         "The durable upload checkpoint must survive a backend restart.\n"
-        "The queued ingestion task must survive a worker restart.\n"
+        "A stale Processing ingestion task must be reclaimed after a worker restart.\n"
+        f"{recovery_lines}"
     ).encode()
     checksum = hashlib.sha256(content).hexdigest()
     csrf_token = new_csrf_token()
@@ -165,6 +185,7 @@ def main() -> None:
     worker_stopped = False
 
     with httpx.Client(base_url=BASE_URL, timeout=30) as client:
+        _wait_for_ready(client)
         client.cookies.set(
             SESSION_COOKIE,
             create_session_token(uuid.UUID(administrator_id), int(session_version)),
@@ -233,7 +254,37 @@ def main() -> None:
                 )
 
             _run(["docker", "compose", "start", "worker"])
-            _run(["docker", "compose", "restart", "worker"])
+            processing = _wait_for_document_status(
+                client,
+                knowledge_base,
+                document_id,
+                "processing",
+                timeout_seconds=90,
+                poll_seconds=0.1,
+                fail_if_statuses=frozenset({"failed", "ready"}),
+            )
+            processing_attempts = int(processing.get("ingestion_attempts") or 0)
+            if processing_attempts < 1:
+                raise RuntimeError("Processing checkpoint did not record an ingestion attempt")
+
+            # A graceful Celery shutdown can finish the active task. Kill the
+            # worker only after the API has observed its durable claim, then
+            # age that checkpoint so the redelivered late-acked task can
+            # exercise stale-Processing reclamation without a 15-minute wait.
+            _run(["docker", "compose", "kill", "-s", "KILL", "worker"])
+            worker_stopped = True
+            stale_update = _psql(
+                postgres_user,
+                postgres_database,
+                "UPDATE documents SET updated_at = now() - interval '2 days' "
+                f"WHERE id = '{document_id}' AND status = 'processing' "
+                "RETURNING status",
+            )
+            if "processing" not in stale_update.splitlines():
+                raise RuntimeError(
+                    "Worker task left Processing before its stale checkpoint was prepared"
+                )
+            _run(["docker", "compose", "start", "worker"])
             worker_stopped = False
 
             recovered = _wait_for_document_status(
@@ -242,6 +293,10 @@ def main() -> None:
                 document_id,
                 "ready",
             )
+            if int(recovered.get("ingestion_attempts") or 0) <= processing_attempts:
+                raise RuntimeError(
+                    "Replacement worker did not reclaim the stale Processing checkpoint"
+                )
 
             malformed = b"def broken(:\n    pass\n"
             malformed_checksum = hashlib.sha256(malformed).hexdigest()
@@ -329,6 +384,7 @@ def main() -> None:
                     {
                         "backend_restart_open_upload": "pass",
                         "ingestion_after_worker_restart": "pass",
+                        "stale_processing_recovery": "pass",
                         "document_status": recovered["status"],
                         "failed_parser_consistency": "pass",
                         "failed_parser_retry": "pass",
@@ -405,14 +461,42 @@ def main() -> None:
                         "-d",
                         postgres_database,
                         "-c",
-                        "DELETE FROM upload_sessions "
-                        f"WHERE id = '{failure_upload_id}'",
+                        (
+                            "DELETE FROM upload_sessions "
+                            f"WHERE id = '{failure_upload_id}'"
+                        ),
                     ],
                     cwd=ROOT,
                     check=False,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
+
+
+def main() -> None:
+    recovery_overrides = {
+        "MIKURAG_CELERY_VISIBILITY_TIMEOUT_SECONDS": "60",
+        "MIKURAG_INGESTION_STALE_AFTER_SECONDS": "60",
+    }
+    original_values = {key: os.environ.get(key) for key in recovery_overrides}
+    os.environ.update(recovery_overrides)
+    try:
+        # Recreate the worker so the shortened smoke-test recovery window is
+        # present before it can reserve the task that the test later kills.
+        _run(["docker", "compose", "up", "-d", "--force-recreate", "worker"])
+        _run_restart_smoke()
+    finally:
+        for key, value in original_values.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        # Leave the installation running with its normal recovery settings.
+        subprocess.run(
+            ["docker", "compose", "up", "-d", "--force-recreate", "worker"],
+            cwd=ROOT,
+            check=False,
+        )
 
 
 if __name__ == "__main__":

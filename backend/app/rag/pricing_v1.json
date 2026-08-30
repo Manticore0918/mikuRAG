@@ -1,8 +1,15 @@
 {
   "schema_version": 1,
-  "version": "2026-08-28",
+  "version": "2026-08-30",
   "currency": "USD",
   "models": [
+    {
+      "kind": "embedding",
+      "provider": "local",
+      "model": "*",
+      "input_usd_per_million_tokens": 0.0,
+      "note": "Local embeddings have zero API spend; compute cost is reported separately."
+    },
     {
       "kind": "generation",
       "provider": "local",

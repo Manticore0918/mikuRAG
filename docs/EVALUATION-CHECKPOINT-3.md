@@ -15,13 +15,18 @@ disabled because answer faithfulness is checkpoint 4.
 
 ## Frozen test-split ablation
 
-| Configuration | Effective providers | Recall@10 | MRR@10 | NDCG@10 | p95 retrieval | Evidence tokens | Headline valid |
+| Configuration | Effective providers | Recall@10 (95% CI) | MRR@10 (95% CI) | NDCG@10 (95% CI) | p95 retrieval | Evidence tokens | Headline valid |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Vector only | vector | 0.8846 | 0.7500 | 0.8408 | 15.6 ms | 290 | yes |
-| PostgreSQL FTS baseline | FTS | 0.0769 | 0.0769 | 0.0769 | 7.4 ms | 0 | yes |
-| BM25 only | pg_search BM25 | 0.9487 | 0.8654 | 0.8922 | 29.3 ms | 272 | yes |
-| Vector + BM25 + RRF | vector, BM25 | 0.9615 | 0.7949 | 0.8871 | 50.6 ms | 300 | yes |
-| Hybrid + local cross-encoder | vector, BM25, `ms-marco-MiniLM-L-6-v2` | 0.9487 | 0.8333 | 0.9107 | 4914.3 ms | 267 | yes |
+| Vector only | vector | 0.8846 [0.7308, 1.0000] | 0.7500 [0.5192, 0.9423] | 0.8408 [0.6560, 1.0000] | 15.6 ms | 290 | no |
+| PostgreSQL FTS baseline | FTS | 0.0769 [0.0000, 0.2308] | 0.0769 [0.0000, 0.2308] | 0.0769 [0.0000, 0.2308] | 7.4 ms | 0 | no |
+| BM25 only | pg_search BM25 | 0.9487 [0.8462, 1.0000] | 0.8654 [0.6538, 1.0000] | 0.8922 [0.7746, 0.9885] | 29.3 ms | 272 | no |
+| Vector + BM25 + RRF | vector, BM25 | 0.9615 [0.8846, 1.0000] | 0.7949 [0.6026, 0.9615] | 0.8871 [0.7667, 1.0000] | 50.6 ms | 300 | no |
+| Hybrid + local cross-encoder | vector, BM25, `ms-marco-MiniLM-L-6-v2` | 0.9487 [0.8462, 1.0000] | 0.8333 [0.6407, 1.0000] | 0.9107 [0.7829, 1.0000] | 4914.3 ms | 267 | no |
+
+`gold_v1` remains `headline_eligible: false`, so these rows are measured
+diagnostics rather than publishable headline claims. The intervals above are
+bootstrap intervals recomputed on the same frozen 13-case test split with the
+recorded 1,000 samples and seed `20260828`.
 
 Run IDs, in table order:
 
@@ -71,8 +76,10 @@ deterministic eligibility rule left 61 questions unchanged; all three eligible
 rewrite requests hit the provider timeout/unavailable path and were recorded as
 `rewrite_failed`, then safely used the original question. Test retrieval metrics
 therefore matched vector-original (0.8846 Recall@10, 0.7500 MRR, 0.8408
-NDCG@10) while p95 retrieval increased to 25.1 ms. Rewriting remains disabled
-until a run contains successful rewrites and demonstrates a frozen-test lift.
+NDCG@10) while p95 retrieval increased to 25.1 ms. Production query planning is
+disabled by default with `MIKURAG_QUERY_PLANNING_ENABLED=false` until a run
+contains successful rewrites and demonstrates a frozen-test lift. Evaluation
+flags continue to control planning explicitly and independently of that default.
 
 The paired CLI invocation subsequently encountered a transient embedding
 provider connection failure while starting its second, original-query run. It

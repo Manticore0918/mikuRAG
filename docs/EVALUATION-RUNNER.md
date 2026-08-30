@@ -57,10 +57,12 @@ Checkpoint 3 adds the retrieval experiment knobs to `run` and `compare`:
 - `--bm25-hybrid-enabled` forces the pg_search BM25 leg into hybrid modes for
   this run, even when `MIKURAG_BM25_HYBRID_ENABLED` is off (the production
   default keeps BM25 off until the evaluation gate passes);
-- `--no-query-planning` disables the typed query plan per evaluation case (each
-  manifest case can carry a bounded synthetic Conversation history, so follow-up
-  cases exercise the production rewrite path and record the original/effective
-  query, rewrite status, preserved identifiers, and history in `raw-run.json`).
+- `--no-query-planning` disables the typed query plan per evaluation case. The
+  evaluation switch is explicit and independent of the production
+  `MIKURAG_QUERY_PLANNING_ENABLED=false` default: each manifest case can carry a
+  bounded synthetic Conversation history, so enabled evaluation cases exercise
+  the real typed rewrite path and record the original/effective query, rewrite
+  status, preserved identifiers, and history in `raw-run.json`.
 
 ### Retrieval modes
 

@@ -127,15 +127,21 @@ Initial SLOs (alerts are examples, not tuned production thresholds):
 
 ## CI/CD
 
+The checkpoint 5 baseline has completed successfully in GitHub Actions. The
+current workflow-hardening fixes are locally validated and still need their
+post-push CI run. Repository branch-protection rules, protected evaluation
+configuration, an end-to-end tag release, and the portfolio trace/dashboard
+capture remain operator-owned setup or release exercises.
+
 `.github/workflows/ci.yml` runs on every pull request and push to `main`:
 
 | Job | What it proves |
 | --- | --- |
 | Backend / Ruff + pytest | lint and the unit suite (integration tests excluded) |
 | Frontend / ESLint + Vitest + build | lint, tests, production build |
-| Integrations | Alembic upgrade from a clean database and from the previous release schema (`0005` → head, matching `scripts/migration_smoke.py`), plus real-PostgreSQL/pgvector/Redis integration tests (`pytest -m integration`) |
+| Integrations | Alembic upgrade from a clean database and from the previous release schema (`0007` → head, matching `scripts/migration_smoke.py`), plus real-PostgreSQL/pgvector/Redis integration tests (`pytest -m integration`) |
 | Images | backend and frontend container builds (with GHA layer cache) |
-| Compose smoke | `scripts/compose_smoke.py` under the isolated `mikurag-smoke` project: stubbed model providers, migration, demo seed, resumable upload, a grounded cited answer, a two-case evaluation subset with report-schema validation, and (with `MIKURAG_SMOKE_OTEL=1`) verification that Prometheus scrapes the collector (exporter :8889 and self-telemetry :8888), that a real mikuRAG turn metric reached Prometheus, and that the collector accepted spans |
+| Compose smoke | `scripts/compose_smoke.py` under the isolated `mikurag-smoke` project: stubbed model providers, migration, demo seed, resumable upload, a grounded cited answer, a two-case evaluation subset with version, type, successful-run invariant, configuration, ingestion, metric-range, category, and split validation, and (with `MIKURAG_SMOKE_OTEL=1`) verification that Prometheus scrapes the collector (exporter :8889 and self-telemetry :8888), that a real mikuRAG turn metric reached Prometheus, and that the collector accepted spans |
 
 `.github/workflows/release.yml` runs on `v*` tags: builds immutable
 backend/frontend images tagged with the git tag and full SHA (with SBOM and
@@ -143,9 +149,24 @@ provenance attestations), publishes them to GHCR, and creates a GitHub
 release with SBOMs, SHA-256 checksums, deployment steps, and rollback
 guidance.
 
-`.github/workflows/evaluation.yml` is the scheduled/manual full
-provider-backed evaluation. It uses protected secrets, is gated to the origin
-repository, and is never required for pull requests.
+`.github/workflows/evaluation.yml` is the scheduled/manual/reusable full
+provider-backed evaluation and is never required for pull requests. Manual and
+tag-release invocations always run, then fail before infrastructure startup if
+required provider configuration is absent or an endpoint is not HTTPS.
+Scheduled invocations run only when the repository variable
+`MIKURAG_SCHEDULED_EVALUATION_ENABLED` is `true`, avoiding provider use in an
+unconfigured fork without coupling releases to one repository name.
+
+Configure the protected `evaluation` environment with these values:
+
+- secrets: `MIKURAG_EMBEDDING_API_KEY`, `MIKURAG_GENERATION_API_KEY`;
+- variables: `MIKURAG_EMBEDDING_ENDPOINT`, `MIKURAG_EMBEDDING_MODEL_ID`,
+  `MIKURAG_GENERATION_BASE_URL`, `MIKURAG_GENERATION_MODEL_ID`.
+
+Every runner-backed workflow job has an explicit timeout. The release quality
+gate calls the reusable evaluation workflow, whose runner job owns the
+120-minute timeout because GitHub does not support `timeout-minutes` on a
+reusable-workflow caller job.
 
 ### Local commands
 

@@ -464,7 +464,9 @@ async def test_every_mode_scopes_retrieval_to_the_knowledge_base(
     [
         RetrievalMode.VECTOR,
         RetrievalMode.FTS_BASELINE,
+        RetrievalMode.BM25,
         RetrievalMode.HYBRID_RRF,
+        RetrievalMode.HYBRID_RRF_RERANKED,
     ],
 )
 async def test_filters_are_pushed_into_every_leg_before_ranking(
@@ -472,7 +474,11 @@ async def test_filters_are_pushed_into_every_leg_before_ranking(
 ) -> None:
     knowledge_base_id = uuid.uuid4()
     document_id = uuid.uuid4()
-    session = FakeSession()
+    session = FakeSession(
+        bm25_available=(True, True)
+        if mode == RetrievalMode.BM25
+        else (False, False)
+    )
     await retrieve_evidence(
         session,
         knowledge_base_id,
@@ -489,9 +495,11 @@ async def test_filters_are_pushed_into_every_leg_before_ranking(
     )
 
     executed = selects(session)
-    expected_legs = (
-        1 if mode in (RetrievalMode.VECTOR, RetrievalMode.FTS_BASELINE) else 2
-    )
+    expected_legs = 1 if mode in (
+        RetrievalMode.VECTOR,
+        RetrievalMode.FTS_BASELINE,
+        RetrievalMode.BM25,
+    ) else 2
     assert len(executed) == expected_legs
     for statement in executed:
         values = compiled_values(statement)
