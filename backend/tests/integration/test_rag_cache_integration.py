@@ -115,6 +115,7 @@ async def corpus(db_session, settings):
         embedding_model=settings.embedding_model_id,
     )
     db_session.add_all([primary_chunk, other_chunk])
+    knowledge_base_ids = [primary_kb.id, other_kb.id]
     await db_session.commit()
 
     yield Corpus(
@@ -128,9 +129,7 @@ async def corpus(db_session, settings):
 
     await db_session.rollback()
     await db_session.execute(
-        delete(KnowledgeBase).where(
-            KnowledgeBase.id.in_([primary_kb.id, other_kb.id])
-        )
+        delete(KnowledgeBase).where(KnowledgeBase.id.in_(knowledge_base_ids))
     )
     await db_session.commit()
 
@@ -168,12 +167,13 @@ async def turn_records(db_session, corpus):
         model_metadata={},
     )
     db_session.add_all([user_message, assistant_message])
+    user_id = user.id
     await db_session.commit()
 
     yield TurnRecords(user, conversation, user_message, assistant_message)
 
     await db_session.rollback()
-    await db_session.execute(delete(User).where(User.id == user.id))
+    await db_session.execute(delete(User).where(User.id == user_id))
     await db_session.commit()
 
 
