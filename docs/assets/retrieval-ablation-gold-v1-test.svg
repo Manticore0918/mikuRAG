@@ -9,7 +9,7 @@
     <rect x="72" y="146" width="16" height="16" rx="4" fill="#22d3ee"/><text x="98" y="160" fill="#cbd5e1">Recall@10</text>
     <rect x="212" y="146" width="16" height="16" rx="4" fill="#a78bfa"/><text x="238" y="160" fill="#cbd5e1">MRR@10</text>
     <rect x="336" y="146" width="16" height="16" rx="4" fill="#fbbf24"/><text x="362" y="160" fill="#cbd5e1">NDCG@10</text>
-    <text x="1180" y="160" fill="#cbd5e1" font-weight="600">Retrieval p95</text>
+    <text x="1140" y="160" fill="#cbd5e1" font-weight="600">Warm retrieval p95</text>
   </g>
 
   <g stroke="#25304a" stroke-width="1">
@@ -44,12 +44,12 @@
     <text x="1003" y="590" fill="#67e8f9" font-size="14">0.962</text><text x="883" y="612" fill="#c4b5fd" font-size="14">0.795</text><text x="950" y="634" fill="#fde68a" font-size="14">0.887</text><text x="1180" y="610" fill="#e2e8f0" font-size="20" font-weight="650">50.6 ms</text>
 
     <line x1="72" y1="668" x2="1328" y2="668" stroke="#1e293b"/>
-    <text x="72" y="728" fill="#f8fafc" font-size="22" font-weight="650">Hybrid + reranker</text><text x="72" y="752" fill="#64748b" font-size="14">RRF + MiniLM cross-encoder</text>
+    <text x="72" y="728" fill="#f8fafc" font-size="22" font-weight="650">Hybrid + reranker</text><text x="72" y="752" fill="#64748b" font-size="14">RRF + MiniLM cross-encoder · cold start 11.8 s</text>
     <rect x="300" y="698" width="683" height="13" rx="6" fill="#22d3ee"/><rect x="300" y="720" width="600" height="13" rx="6" fill="#a78bfa"/><rect x="300" y="742" width="656" height="13" rx="6" fill="#fbbf24"/>
-    <text x="994" y="710" fill="#67e8f9" font-size="14">0.949</text><text x="911" y="732" fill="#c4b5fd" font-size="14">0.833</text><text x="967" y="754" fill="#fde68a" font-size="14">0.911</text><text x="1180" y="730" fill="#fca5a5" font-size="20" font-weight="650">4,914 ms</text>
+    <text x="994" y="710" fill="#67e8f9" font-size="14">0.949</text><text x="911" y="732" fill="#c4b5fd" font-size="14">0.833</text><text x="967" y="754" fill="#fde68a" font-size="14">0.911</text><text x="1180" y="730" fill="#fbbf24" font-size="20" font-weight="650">288 ms</text>
   </g>
 
   <rect x="72" y="822" width="1256" height="1" fill="#25304a"/>
-  <text x="72" y="860" fill="#94a3b8" font-family="Inter,Segoe UI,sans-serif" font-size="16">Interpretation: BM25 and hybrid retrieval improve this frozen diagnostic corpus; the cross-encoder adds NDCG but dominates latency.</text>
+  <text x="72" y="860" fill="#94a3b8" font-family="Inter,Segoe UI,sans-serif" font-size="16">Interpretation: the cross-encoder adds NDCG but increases warm latency; its 11.8 s CPU cold start is reported separately.</text>
   <text x="72" y="888" fill="#64748b" font-family="Inter,Segoe UI,sans-serif" font-size="14">Not headline-eligible · source: docs/evidence/retrieval-ablation-gold-v1-test-2026-08-28.json</text>
 </svg>

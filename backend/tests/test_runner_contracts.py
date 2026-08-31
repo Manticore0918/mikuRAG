@@ -321,6 +321,36 @@ def test_runtime_public_configuration_exposes_retrieval_keys() -> None:
     assert config["retrieval_rrf_k"] == 40
     assert config["retrieval_rrf_semantic_weight"] == 1.5
     assert config["retrieval_rrf_lexical_weight"] == 0.8
+    assert config["reranker_warmup_status"] == "pending"
+    assert config["reranker_warmup_ms"] is None
+    assert config["retrieval_latency_scope"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_runtime_prewarms_reranker_outside_timed_cases() -> None:
+    class RecordingReranker:
+        provider_name = "cross_encoder"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def warmup(self) -> None:
+            self.calls += 1
+
+    runtime = DatabaseEvaluationRuntime(
+        settings=_settings(retrieval_mode="hybrid_rrf_reranked"),
+        reranker_provider="cross_encoder",
+    )
+    reranker = RecordingReranker()
+    runtime.reranker = reranker
+
+    await runtime.warmup()
+    config = runtime.public_configuration(include_answers=False)
+
+    assert reranker.calls == 1
+    assert config["reranker_warmup_status"] == "completed"
+    assert config["reranker_warmup_ms"] >= 0
+    assert config["retrieval_latency_scope"] == "steady_state_after_reranker_warmup"
 
 
 def test_options_reject_unknown_retrieval_mode(tmp_path: Path) -> None:

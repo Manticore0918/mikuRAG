@@ -40,6 +40,19 @@
     "postgres_version": "16.15",
     "pg_search_version": "0.25.5"
   },
+  "latency_methodology": {
+    "corrected_at": "2026-08-30",
+    "original_runner_behavior": "The cross-encoder model was lazy-loaded inside the first timed retrieval case.",
+    "comparison_statistic": "steady_state_retrieval_p95_ms",
+    "steady_state_rule": "Exclude the single explicitly identified cross-encoder cold-start case; retain the original cold-inclusive percentile separately.",
+    "cold_start_case_id": "e-svc1042",
+    "cold_start_retrieval_ms": 11836.30207600072,
+    "cold_start_reranker_ms": 11799.59279600007,
+    "cold_inclusive_retrieval_p95_ms": 4914.320964401106,
+    "steady_state_case_count": 12,
+    "steady_state_retrieval_p50_ms": 182.43368699768325,
+    "steady_state_retrieval_p95_ms": 287.7541897512856
+  },
   "results": [
     {
       "mode": "vector",
@@ -94,8 +107,11 @@
       "mrr_at_10": 0.8333333333333334,
       "ndcg_at_10": 0.9106931317247802,
       "retrieval_p95_ms": 4914.320964401106,
+      "steady_state_retrieval_p50_ms": 182.43368699768325,
+      "steady_state_retrieval_p95_ms": 287.7541897512856,
+      "cold_start_retrieval_ms": 11836.30207600072,
+      "cold_start_reranker_ms": 11799.59279600007,
       "mean_evidence_tokens": 267.46153846153845
     }
   ]
 }
-

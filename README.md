@@ -52,6 +52,10 @@ default is pgvector plus PostgreSQL full-text search fused with RRF; pg_search
 BM25, query planning, the local cross-encoder, hierarchical retrieval, and
 derived caches are explicit experimental/optional paths.
 
+The [one-page architecture and metrics case study](./docs/ARCHITECTURE-METRICS-CASE-STUDY.md)
+connects this design to the measured reranker latency trade-off and the
+hard-worker-kill recovery evidence.
+
 ## Five-minute seeded demo
 
 The interaction path takes about five minutes after first-time image pulls,
@@ -123,13 +127,13 @@ real worker, queries the production retrieval path, writes raw and aggregate
 reports, and deletes its isolated Knowledge Base. The current corpus contains 64
 reviewed questions over 14 Documents; the frozen test slice contains 13 cases.
 
-| Mode | Recall@10 | MRR@10 | NDCG@10 | Retrieval p95 | Mean evidence tokens |
+| Mode | Recall@10 | MRR@10 | NDCG@10 | Steady-state retrieval p95 | Mean evidence tokens |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Vector | 0.8846 | 0.7500 | 0.8408 | 15.6 ms | 290 |
 | PostgreSQL FTS baseline | 0.0769 | 0.0769 | 0.0769 | 7.4 ms | 0 |
 | pg_search BM25 | 0.9487 | 0.8654 | 0.8922 | 29.3 ms | 272 |
 | Vector + BM25 + RRF | 0.9615 | 0.7949 | 0.8871 | 50.6 ms | 300 |
-| Hybrid + local cross-encoder | 0.9487 | 0.8333 | 0.9107 | 4,914.3 ms | 267 |
+| Hybrid + local cross-encoder | 0.9487 | 0.8333 | 0.9107 | 287.8 ms | 267 |
 
 ![Retrieval quality and latency trade-off](./docs/assets/retrieval-ablation-gold-v1-test.svg)
 
@@ -140,12 +144,19 @@ records the exact commit, manifest blob, command, configuration, run IDs, and
 full-precision values. The [analysis](./docs/EVALUATION-CHECKPOINT-3.md) explains
 confidence intervals and category results.
 
+The original runner lazy-loaded the cross-encoder inside its first timed case:
+that case took 11,836.3 ms, of which 11,799.6 ms was reranker startup, and
+inflated the cold-inclusive 13-case p95 to 4,914.3 ms. The table separates that
+cold start and reports the remaining 12 cases' 287.8 ms p95. Current evaluation
+runs prewarm the reranker outside case timings and record warmup duration in the
+run configuration.
+
 The evidence drove conservative defaults. BM25 improved aggregate diagnostics
 but did not prove the expected exact-identifier advantage. The cross-encoder
-improved hybrid NDCG by 0.0236 while exceeding the 1,500 ms p95 target by more
-than three times, so both BM25 promotion and learned reranking remain off by
-default. Reranker failure is visible and falls back to the already-authorized RRF
-order.
+improved hybrid NDCG by 0.0236 but reduced recall, raised warm p95 latency from
+50.6 ms to 287.8 ms, and incurred an 11.8-second CPU cold start in the original
+run, so both BM25 promotion and learned reranking remain off by default.
+Reranker failure is visible and falls back to the already-authorized RRF order.
 
 Run a small evaluation with:
 
@@ -239,6 +250,7 @@ checks.
 
 ## Project evidence and operations
 
+- [Architecture and metrics case study](./docs/ARCHITECTURE-METRICS-CASE-STUDY.md)
 - [Portfolio release readiness](./docs/PORTFOLIO-RELEASE.md)
 - [Portfolio media and redaction plan](./docs/PORTFOLIO-MEDIA.md)
 - [Truthful résumé bullets](./docs/RESUME-BULLETS.md)
@@ -249,3 +261,13 @@ checks.
 - [Chunking configuration and rollout](./docs/CHUNKING-CONFIG.md)
 - [Architecture decisions](./docs/adr)
 - [Product language](./CONTEXT.md)
+
+## License
+
+mikuRAG's source code and documentation are licensed under the
+[Apache License 2.0](./LICENSE).
+
+The synthetic evaluation corpora under `backend/evaluation/corpus` are dedicated
+to the public domain under CC0 1.0, as specified by the `LICENSE.txt` file in
+each versioned corpus directory. Third-party dependencies and container images
+remain subject to their respective licenses.

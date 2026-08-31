@@ -92,6 +92,9 @@ class FakeRuntime:
             "storage_estimate_bytes": 4096,
         }
 
+    async def warmup(self) -> None:
+        self.actions.append("warmup")
+
     async def run_case(self, workspace, case, dataset, *, include_answers):
         self.actions.append(f"case:{case.case_id}:{include_answers}")
         passages = case.required_passage_ids if case.expects_supported_answer else ()
@@ -201,6 +204,9 @@ async def test_executable_runner_writes_raw_and_aggregate_artifacts(tmp_path: Pa
     assert len(raw["documents"]) == 4
     assert len(raw["cases"]) == 5
     assert raw["embedding_input_count"] == 4
+    assert runtime.actions.index("warmup") < next(
+        index for index, action in enumerate(runtime.actions) if action.startswith("case:")
+    )
     assert runtime.actions[-1] == "cleanup"
 
 

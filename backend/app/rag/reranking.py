@@ -19,6 +19,8 @@ class RerankerProviderError(RuntimeError):
 
 
 class Reranker(Protocol):
+    async def warmup(self) -> None: ...
+
     async def rerank(
         self,
         query: str,
@@ -32,6 +34,9 @@ class DeterministicReranker:
     provider_name = "deterministic"
     model_name: str | None = None
     version = "deterministic_v1"
+
+    async def warmup(self) -> None:
+        return None
 
     async def rerank(
         self,
@@ -130,16 +135,18 @@ class CrossEncoderReranker:
             show_progress_bar=False,
         )
 
-    async def rerank(
+    async def warmup(self) -> None:
+        """Load the model and execute one untimed inference batch."""
+        await self._predict_with_timeout(
+            [("reranker warmup query", "reranker warmup passage")]
+        )
+
+    async def _predict_with_timeout(
         self,
-        query: str,
-        candidates: list[Candidate],
-    ) -> list[Candidate]:
-        if not candidates:
-            return candidates
+        pairs: list[tuple[str, str]],
+    ) -> object:
         if self._semaphore is None:
             self._semaphore = asyncio.Semaphore(self.max_concurrency)
-        pairs = [(query, candidate.text) for candidate in candidates]
         started = perf_counter()
         acquired = False
         worker: asyncio.Task | None = None
@@ -155,7 +162,7 @@ class CrossEncoderReranker:
             worker = asyncio.create_task(asyncio.to_thread(self._predict, pairs))
             # Shield the thread-backed Task so a wall-clock timeout returns to
             # the caller without pretending the underlying inference stopped.
-            scores = await asyncio.wait_for(asyncio.shield(worker), timeout=remaining)
+            return await asyncio.wait_for(asyncio.shield(worker), timeout=remaining)
         except Exception as error:
             if acquired and worker is not None and not worker.done():
                 # Keep the concurrency slot occupied until the uncancellable
@@ -177,6 +184,16 @@ class CrossEncoderReranker:
         finally:
             if acquired:
                 self._semaphore.release()
+
+    async def rerank(
+        self,
+        query: str,
+        candidates: list[Candidate],
+    ) -> list[Candidate]:
+        if not candidates:
+            return candidates
+        pairs = [(query, candidate.text) for candidate in candidates]
+        scores = await self._predict_with_timeout(pairs)
         reranked = [
             replace(candidate, rerank_score=float(score))
             for candidate, score in zip(candidates, scores, strict=True)

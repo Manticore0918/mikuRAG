@@ -15,18 +15,26 @@ disabled because answer faithfulness is checkpoint 4.
 
 ## Frozen test-split ablation
 
-| Configuration | Effective providers | Recall@10 (95% CI) | MRR@10 (95% CI) | NDCG@10 (95% CI) | p95 retrieval | Evidence tokens | Headline valid |
+| Configuration | Effective providers | Recall@10 (95% CI) | MRR@10 (95% CI) | NDCG@10 (95% CI) | Steady-state p95 retrieval | Evidence tokens | Headline valid |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | Vector only | vector | 0.8846 [0.7308, 1.0000] | 0.7500 [0.5192, 0.9423] | 0.8408 [0.6560, 1.0000] | 15.6 ms | 290 | no |
 | PostgreSQL FTS baseline | FTS | 0.0769 [0.0000, 0.2308] | 0.0769 [0.0000, 0.2308] | 0.0769 [0.0000, 0.2308] | 7.4 ms | 0 | no |
 | BM25 only | pg_search BM25 | 0.9487 [0.8462, 1.0000] | 0.8654 [0.6538, 1.0000] | 0.8922 [0.7746, 0.9885] | 29.3 ms | 272 | no |
 | Vector + BM25 + RRF | vector, BM25 | 0.9615 [0.8846, 1.0000] | 0.7949 [0.6026, 0.9615] | 0.8871 [0.7667, 1.0000] | 50.6 ms | 300 | no |
-| Hybrid + local cross-encoder | vector, BM25, `ms-marco-MiniLM-L-6-v2` | 0.9487 [0.8462, 1.0000] | 0.8333 [0.6407, 1.0000] | 0.9107 [0.7829, 1.0000] | 4914.3 ms | 267 | no |
+| Hybrid + local cross-encoder | vector, BM25, `ms-marco-MiniLM-L-6-v2` | 0.9487 [0.8462, 1.0000] | 0.8333 [0.6407, 1.0000] | 0.9107 [0.7829, 1.0000] | 287.8 ms | 267 | no |
 
 `gold_v1` remains `headline_eligible: false`, so these rows are measured
 diagnostics rather than publishable headline claims. The intervals above are
 bootstrap intervals recomputed on the same frozen 13-case test split with the
 recorded 1,000 samples and seed `20260828`.
+
+The reranker row requires a latency correction. The original runner loaded the
+cross-encoder during the first timed test case. That case measured 11,836.3 ms
+retrieval / 11,799.6 ms reranking; the other 12 cases had a 182.4 ms median and
+287.8 ms p95. With only 13 cases, interpolation against that one cold outlier
+produced the original cold-inclusive 4,914.3 ms p95. The evidence envelope keeps
+both values. Current runs prewarm the reranker outside timed cases and record
+the warmup duration separately.
 
 Run IDs, in table order:
 
@@ -50,10 +58,10 @@ result summary.
   0.0128 recall but reduced MRR by 0.0705 and NDCG by 0.0051, so the current
   equal RRF weights are retained as an experiment rather than made the default.
 - The local cross-encoder improved hybrid MRR by 0.0385 and NDCG by 0.0236, but
-  reduced recall by 0.0128 and reached 4914.3 ms p95 on the frozen test split.
-  This exceeds `MIKURAG_ACCEPTANCE_RETRIEVAL_P95_TARGET_MS=1500`; the learned
-  reranker remains disabled by default. Its timeout, concurrency limit, and
-  fused-order fallback stay available and tested.
+  reduced recall by 0.0128 and raised steady-state p95 from 50.6 ms to 287.8 ms.
+  Its original CPU cold start was 11.8 seconds. The learned reranker remains
+  disabled by default pending larger-corpus and concurrency evidence; its
+  timeout, concurrency limit, and fused-order fallback stay available and tested.
 - Metadata-filtered cases recorded filter correctness 1.0000. Authorization is
   a separate mandatory pre-ranking predicate, with cross-Knowledge-Base leakage
   tests covering every mode.

@@ -113,6 +113,8 @@ class EvaluationRuntime(Protocol):
         include_answers: bool,
     ) -> EvaluationCaseRecord: ...
 
+    async def warmup(self) -> None: ...
+
     def ingestion_statistics(self) -> dict[str, object]: ...
 
     async def cleanup(self, workspace: EvaluationWorkspace) -> None: ...
@@ -160,6 +162,12 @@ class DatabaseEvaluationRuntime:
         self._embedding_token_count = 0
         self._total_chunk_count = 0
         self._storage_estimate_bytes = 0
+        self._reranker_warmup_status = (
+            "pending"
+            if self.retrieval_mode == RetrievalMode.HYBRID_RRF_RERANKED
+            else "not_required"
+        )
+        self._reranker_warmup_ms: float | None = None
 
     def public_configuration(self, *, include_answers: bool) -> dict[str, object]:
         settings = self.effective_settings
@@ -177,6 +185,17 @@ class DatabaseEvaluationRuntime:
             "retrieval_rrf_semantic_weight": settings.retrieval_rrf_semantic_weight,
             "retrieval_rrf_lexical_weight": settings.retrieval_rrf_lexical_weight,
             "reranker_provider": getattr(self.reranker, "provider_name", "deterministic"),
+            "reranker_warmup_status": self._reranker_warmup_status,
+            "reranker_warmup_ms": self._reranker_warmup_ms,
+            "retrieval_latency_scope": (
+                "steady_state_after_reranker_warmup"
+                if self._reranker_warmup_status == "completed"
+                else (
+                    "cold_inclusive"
+                    if self._reranker_warmup_status == "failed"
+                    else self._reranker_warmup_status
+                )
+            ),
             "bm25_hybrid_enabled": settings.bm25_hybrid_enabled,
             "query_planning": self.query_planning,
             "retrieval_semantic_candidates": (settings.retrieval_semantic_candidates),
@@ -185,6 +204,21 @@ class DatabaseEvaluationRuntime:
             "retrieval_evidence_limit": settings.retrieval_evidence_limit,
             "retrieval_evidence_token_budget": (settings.retrieval_evidence_token_budget),
         }
+
+    async def warmup(self) -> None:
+        """Move reranker model loading and first inference outside timed cases."""
+        if self.retrieval_mode != RetrievalMode.HYBRID_RRF_RERANKED:
+            return
+        started = perf_counter()
+        try:
+            await self.reranker.warmup()
+        except Exception as error:
+            self._reranker_warmup_status = "failed"
+            logger.warning("Evaluation reranker warmup failed: %s", error)
+        else:
+            self._reranker_warmup_status = "completed"
+        finally:
+            self._reranker_warmup_ms = (perf_counter() - started) * 1_000
 
     async def create_workspace(
         self,
@@ -756,6 +790,7 @@ async def execute_evaluation(
             poll_seconds=options.poll_seconds,
         )
         ingestion_stats = active_runtime.ingestion_statistics()
+        await active_runtime.warmup()
         for case in dataset.cases:
             cases.append(
                 await active_runtime.run_case(

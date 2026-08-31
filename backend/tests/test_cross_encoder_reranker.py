@@ -119,6 +119,20 @@ async def test_empty_candidates_skip_inference() -> None:
 
 
 @pytest.mark.asyncio
+async def test_warmup_loads_model_and_runs_inference_before_ranking() -> None:
+    encoder = FakeEncoder([0.25])
+    reranker = make_reranker(encoder)
+
+    await reranker.warmup()
+    await reranker.rerank("query", [candidate("passage")])
+
+    assert encoder.predict_calls[0][0] == [
+        ("reranker warmup query", "reranker warmup passage")
+    ]
+    assert encoder.predict_calls[1][0] == [("query", "passage")]
+
+
+@pytest.mark.asyncio
 async def test_timeout_raises_provider_error_for_fallback() -> None:
     encoder = FakeEncoder([0.9], sleep_seconds=0.3)
     reranker = make_reranker(encoder, timeout_seconds=0.05)
